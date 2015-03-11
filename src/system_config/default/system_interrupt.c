@@ -70,14 +70,8 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 // Section: System Interrupt Vector Functions
 // *****************************************************************************
 // *****************************************************************************
-void __ISR (_TIMER_5_VECTOR, IPL7AUTO) Timer5Handler (void)
-{
-    //generates ~32.768 kHz clock on RB7
-    PORTBINV = 1<<7;
-    IFS0bits.T5IF=0; // Be sure to clear the Timer5 interrupt status
-}
-
-
+ 
+ 
 /*******************************************************************************
  End of File
 */

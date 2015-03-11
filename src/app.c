@@ -163,8 +163,7 @@ void APP_Initialize ( void )
         for(j=0; j<48; j++)
             AudioBufs[i].sample[j].l = AudioBufs[i].sample[j].r = j<24 ? 0:0xff;
     }
-
-    //tuner_init();
+    tuner_init();
 }
 
 

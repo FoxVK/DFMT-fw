@@ -3,20 +3,20 @@
 #include <inttypes.h>
 #include "tuner.h"
 
-#define TUNER_A_W 0b00100010 //SEN pin = 0
-#define TUNER_B_W 0b11000110 //SEN pin = 1
-#define TUNER_A_R 0b00100011 //SEN pin = 0
-#define TUNER_B_R 0b11000111 //SEN pin = 1
+#define TUNER_B_W 0b00100010 //SEN pin = 0
+#define TUNER_A_W 0b11000110 //SEN pin = 1
+#define TUNER_B_R 0b00100011 //SEN pin = 0
+#define TUNER_A_R 0b11000111 //SEN pin = 1
 
 
-static enum  {
+static volatile enum  {
     COM_IDLE,
     COM_START, COM_ADDRSND, COM_ADDRACK,
     COM_WR, COM_ACKING,
     COM_STOPPING, COM_STOPPED
 }com_state;
 
-static enum  {
+static volatile enum  {
     COM_DIR_NONE, COM_DIR_READING, COM_DIR_WRITING
 }com_dir;
 
@@ -43,7 +43,7 @@ Generate an ACK or NACK condition at the end of a received byte of data.
 Generate a Stop condition on SDAx and SCLx.
  */
 
-/*
+
 void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
 {
 
@@ -63,15 +63,21 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
         case COM_ADDRSND:
             if(I2C1STATbits.ACKSTAT == 0)
             {
-                com_state = COM_STOPPING;
+                //com_state = COM_STOPPING;
+                //I2C1CONbits.ACKDT = 0; //NAK
+                I2C1CONbits.PEN = 1;
+                com_state = COM_STOPPED;
                 break;
             }
+            else
+                Nop();
         case COM_WR:
             if(com_dir == COM_DIR_WRITING)
             {
                 if(I2C1STATbits.ACKSTAT == 0) //TODO ucesat
                 {
                     com_state = COM_STOPPING;
+                    I2C1CONbits.ACKDT = 0; //NAK
                     break;
                 }
 
@@ -82,14 +88,17 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
                     com_state = COM_WR;
                 }
                 else
+                {
                     com_state = COM_STOPPING;
+                    I2C1CONbits.ACKDT = 0; //NAK
+                }
             }
             else
             {
                 I2C1CONbits.RCEN = 1; //allow receiving
                 com_state = COM_ACKING;
             }
-
+            break;
 
         case COM_ACKING:
             if(ptr<max_len)
@@ -122,8 +131,6 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
             break;
 
     }
-
-
     IFS1bits.I2C1MIF = 0;
 }
 
@@ -141,7 +148,7 @@ void tuner_rw_start(void* data, size_t len)
 void tuner_write(int tuner_id, void* data, size_t len)
 {
     tuner_rw_start(data, len);
-    addr = tuner_id ? TUNER_B_W : TUNER_A_W;
+    addr = tuner_id == 1 ? TUNER_B_W : TUNER_A_W;
     com_dir = COM_DIR_WRITING;
     com_state = COM_START;
     I2C1CONbits.SEN = 1; //start condition, wait for interrupt
@@ -151,7 +158,7 @@ void tuner_write(int tuner_id, void* data, size_t len)
 void tuner_read(int tuner_id, void* data, size_t len)
 {
     tuner_rw_start(data, len);
-    addr = tuner_id ? TUNER_B_R : TUNER_A_R;
+    addr = tuner_id == 1 ? TUNER_B_R : TUNER_A_R;
     com_dir = COM_DIR_READING;
     com_state = COM_START;
     I2C1CONbits.SEN = 1; //start condition, wait for interrupt
@@ -167,6 +174,13 @@ int tuner_bytes_received()
 
 void tuner_init()
 {
+    int i;
+    //TODO dokonfigurovat pocatecni hodnotu na low
+    PORTBbits.RB13 = 0; //tuners reset active
+    for(i=0; i<1000; i++)Nop(); //delay
+    PORTBbits.RB13 = 1; //tuners reset inactive
+    for(i=0; i<1000; i++)Nop(); //delay
+
     //timer5 init
     IPC5SET = 0x1F; //maximal interrupt priority
     //T5CONbits.TCKPS = 0b011; //1:8
@@ -180,7 +194,7 @@ void tuner_init()
     //I2C init
     I2C1BRG = 0x0C2; //DS 24 str 19: PBclk = 40MHz clk = 100kHz
     
-    IPC8bits.I2C1IP = 5; //Interrupt priority 5
+    IPC8bits.I2C1IP = 5; //i2c Interrupt priority 5
     
     IFS1bits.I2C1MIF = 0;    
     IEC1bits.I2C1MIE = 1;
@@ -190,7 +204,27 @@ void tuner_init()
 
     com_dir = COM_DIR_NONE;
     com_state = COM_IDLE;
+
+    char cmd_pwrup[] = {0x01, 0x00, 0x05};
+
+    tuner_write(0, &cmd_pwrup, sizeof(cmd_pwrup));
+
+    while(1)
+        Nop();
+    tuner_read(1, &cmd_pwrup, sizeof(cmd_pwrup));
+
+    while(com_state != COM_IDLE)
+        Nop();
+    tuner_write(1, &cmd_pwrup, sizeof(cmd_pwrup));
+
+    while(1)
+        Nop();
 }
 
-*/
 
+void __ISR (_TIMER_5_VECTOR, IPL7AUTO) Timer5Handler (void)
+{
+    //generates ~32.768 kHz clock on RB7
+    PORTBINV = 1<<7;
+    IFS0bits.T5IF=0; // Be sure to clear the Timer5 interrupt status
+}

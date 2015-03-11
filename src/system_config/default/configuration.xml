@@ -4,24 +4,16 @@
   <ForceOptimization flag="true"/>
   <Files>
     <File>
-      <Name>drv_usb.c</Name>
-      <Path>/framework/driver/usb/usbfs/src/dynamic</Path>
-    </File>
-    <File>
-      <Name>usb_device.c</Name>
-      <Path>/framework/usb/src/dynamic</Path>
-    </File>
-    <File>
-      <Name>sys_int.h</Name>
-      <Path>/framework/system/int</Path>
-    </File>
-    <File>
       <Name>drv_usb_device.c</Name>
       <Path>/framework/driver/usb/usbfs/src/dynamic</Path>
     </File>
     <File>
       <Name>usb_device.h</Name>
       <Path>/framework/usb</Path>
+    </File>
+    <File>
+      <Name>drv_usb.c</Name>
+      <Path>/framework/driver/usb/usbfs/src/dynamic</Path>
     </File>
     <File>
       <Name>sys_devcon.h</Name>
@@ -48,8 +40,16 @@
       <Path>/framework/system/devcon/src</Path>
     </File>
     <File>
+      <Name>usb_device.c</Name>
+      <Path>/framework/usb/src/dynamic</Path>
+    </File>
+    <File>
       <Name>sys_devcon_pic32mx.c</Name>
       <Path>/framework/system/devcon/src</Path>
+    </File>
+    <File>
+      <Name>sys_int.h</Name>
+      <Path>/framework/system/int</Path>
     </File>
     <File>
       <Name>sys_debug.h</Name>
@@ -111,7 +111,7 @@
     <Template>
       <Name>system_config.h</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>F1846D895F895A837AC7FD57850A77F4</Checksum>
+      <Checksum>BAC8A78DF665D060AB8E35E0DC28FBCC</Checksum>
     </Template>
     <Template>
       <Name>system_interrupt.c</Name>
