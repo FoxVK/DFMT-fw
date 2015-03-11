@@ -8,6 +8,7 @@
 #define TUNER_A_R 0b00100011 //SEN pin = 0
 #define TUNER_B_R 0b11000111 //SEN pin = 1
 
+
 static enum  {
     COM_IDLE,
     COM_START, COM_ADDRSND, COM_ADDRACK,
@@ -42,6 +43,7 @@ Generate an ACK or NACK condition at the end of a received byte of data.
 Generate a Stop condition on SDAx and SCLx.
  */
 
+/*
 void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
 {
 
@@ -190,5 +192,5 @@ void tuner_init()
     com_state = COM_IDLE;
 }
 
-
+*/
 

@@ -4,10 +4,6 @@
   <ForceOptimization flag="true"/>
   <Files>
     <File>
-      <Name>usb_device_audio_v1_0.c</Name>
-      <Path>/framework/usb/src/dynamic</Path>
-    </File>
-    <File>
       <Name>drv_usb.c</Name>
       <Path>/framework/driver/usb/usbfs/src/dynamic</Path>
     </File>
@@ -18,10 +14,6 @@
     <File>
       <Name>sys_int.h</Name>
       <Path>/framework/system/int</Path>
-    </File>
-    <File>
-      <Name>usb_device_audio_v1_0.h</Name>
-      <Path>/framework/usb</Path>
     </File>
     <File>
       <Name>drv_usb_device.c</Name>
@@ -36,16 +28,8 @@
       <Path>/framework/system/devcon</Path>
     </File>
     <File>
-      <Name>usb_audio_v1_0.h</Name>
-      <Path>/framework/usb</Path>
-    </File>
-    <File>
       <Name>sys_module.h</Name>
       <Path>/framework/system/common</Path>
-    </File>
-    <File>
-      <Name>usb_device_audio_read_write.c</Name>
-      <Path>/framework/usb/src/dynamic</Path>
     </File>
     <File>
       <Name>sys_ports.c</Name>
@@ -92,6 +76,10 @@
       <Path>/framework/system/console/src</Path>
     </File>
     <File>
+      <Name>usb_device_endpoint_functions.c</Name>
+      <Path>/framework/usb/src/dynamic</Path>
+    </File>
+    <File>
       <Name>sys_reset.h</Name>
       <Path>/framework/system/reset</Path>
     </File>
@@ -123,7 +111,7 @@
     <Template>
       <Name>system_config.h</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>06B2B4DC527986E03A604780250944FA</Checksum>
+      <Checksum>F1846D895F895A837AC7FD57850A77F4</Checksum>
     </Template>
     <Template>
       <Name>system_interrupt.c</Name>
@@ -156,12 +144,12 @@
     <Template>
       <Name>system_init.c</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>C015926B56E004806EE5F1254543FB9F</Checksum>
+      <Checksum>4ABAECCB638064DC80743B4C81D1D084</Checksum>
     </Template>
     <Template>
       <Name>system_definitions.h</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>282DF71DA8329BC8F96A19E26154940A</Checksum>
+      <Checksum>BE9B81513BF8D191A1DFE966E1939E91</Checksum>
     </Template>
     <Template>
       <Name>sys_clk_static.c</Name>

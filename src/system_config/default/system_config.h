@@ -182,31 +182,11 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 
 
 
-/* Maximum instances of Audio function driver */
-#define USB_DEVICE_AUDIO_INSTANCES_NUMBER  1
 
 
 
-
-
-
-
-
-
-
-
-/* Audio Queue Depth Combined */
-#define USB_DEVICE_AUDIO_QUEUE_DEPTH_COMBINED     3
-
-
-/* No of Audio streaming interfaces */
-#define USB_DEVICE_AUDIO_MAX_STREAMING_INTERFACES   1
-
-/* No of alternate settings */
-#define USB_DEVICE_AUDIO_MAX_ALTERNATE_SETTING      2
-
-
-
+/* Endpoint Transfer Queue Size combined for Read and write */
+#define USB_DEVICE_ENDPOINT_QUEUE_DEPTH_COMBINED    1
 
 
 

@@ -60,7 +60,6 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #include "system/ports/sys_ports.h"
 #include "system/debug/sys_debug.h"
 #include "usb/usb_device.h"
-#include "usb/usb_device_audio_v1_0.h"
 
 // *****************************************************************************
 // *****************************************************************************

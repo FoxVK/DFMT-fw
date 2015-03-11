@@ -73,7 +73,7 @@ typedef struct {
         uint8_t r;
     }sample[48];
     int isFree;
-    USB_DEVICE_AUDIO_TRANSFER_HANDLE trasfer_handle;
+    USB_DEVICE_TRANSFER_HANDLE trasfer_handle;
 }AudioDataBufs;
 
 // *****************************************************************************

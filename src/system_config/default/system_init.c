@@ -110,11 +110,6 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 /**************************************************
  * USB Device Function Driver Init Data
  **************************************************/
-    const USB_DEVICE_AUDIO_INIT audioInit0 =
-    {
-        .queueSizeRead = 0,
-        .queueSizeWrite = 2
-    };
 /**************************************************
  * USB Device Layer Function Driver Registration 
  * Table
@@ -127,9 +122,9 @@ const USB_DEVICE_FUNCTION_REGISTRATION_TABLE funcRegistrationTable[1] =
         .interfaceNumber = 0,       /* First interfaceNumber of this function */
         .numberOfInterfaces = 2,    /* Number of interfaces */
         .speed = USB_SPEED_FULL,    /* Function Speed */ 
-        .funcDriverIndex = 0,  /* Index of Audio Function Driver */
-        .driver = (void*)USB_DEVICE_AUDIO_FUNCTION_DRIVER,   /* USB Audio function data exposed to device layer */
-        .funcDriverInit = (void*)&audioInit0,   /* Function driver init data*/
+        .funcDriverIndex = 0,  /* Index of Vendor Driver */
+        .driver = NULL,            /* No Function Driver data */
+        .funcDriverInit = NULL     /* No Function Driver Init data */
     },
 };
 
@@ -169,6 +164,49 @@ const USB_configuration_decriptor conf_desc =
     .bMaxPower = 50
 };
 */
+#define  USB_AUDIO_CLASS_CODE 0x01
+typedef enum
+{
+    USB_AUDIO_SUBCLASS_UNDEFINED    = 0x00,
+    USB_AUDIO_AUDIOCONTROL          = 0x01,
+    USB_AUDIO_AUDIOSTREAMING        = 0x02,
+    USB_AUDIO_MIDISTREAMING         = 0x03
+
+} USB_AUDIO_SUBCLASS_CODE;
+
+typedef enum
+{
+    USB_AUDIO_CS_UNDEFINED       = 0x20,
+    USB_AUDIO_CS_DEVICE          = 0x21,
+    USB_AUDIO_CS_CONFIGURATION   = 0x22,
+    USB_AUDIO_CS_STRING          = 0x23,
+    USB_AUDIO_CS_INTERFACE       = 0x24,
+    USB_AUDIO_CS_ENDPOINT        = 0x25
+
+} USB_AUDIO_CS_DESCRIPTOR_TYPE;
+typedef enum
+{
+    USB_AUDIO_AC_DESCRIPTOR_UNDEFINED    = 0x00,
+    USB_AUDIO_HEADER                     = 0x01,
+    USB_AUDIO_INPUT_TERMINAL             = 0x02,
+    USB_AUDIO_OUTPUT_TERMINAL            = 0x03,
+    USB_AUDIO_MIXER_UNIT                 = 0x04,
+    USB_AUDIO_SELECTOR_UNIT              = 0x05,
+    USB_AUDIO_FEATURE_UNIT               = 0x06,
+    USB_AUDIO_PROCESSING_UNIT            = 0x07,
+    USB_AUDIO_EXTENSION_UNIT             = 0x08,
+
+} USB_AUDIO_CS_AC_INTERFACE_DESCRIPTOR_SUBTYPE;
+typedef enum
+{
+    USB_AUDIO_AS_DESCRIPTOR_UNDEFINED    = 0x00,
+    USB_AUDIO_AS_GENERAL                 = 0x01,
+    USB_AUDIO_FORMAT_TYPE                = 0x02,
+    USB_AUDIO_FORMAT_SPECIFIC            = 0x03
+
+} USB_AUDIO_CS_AS_INTERFACE_DESCRIPTOR_SUBTYPE;
+
+
 const uint8_t conf_desc[] =
 {
     /* USB Microphone Configuration Descriptor */
@@ -458,7 +496,11 @@ const USB_DEVICE_INIT usbDevInitData =
     /* USB Device Speed */
     .deviceSpeed = USB_SPEED_FULL,
 
+    /* Specify queue size for vendor endpoint read */
+    .queueSizeEndpointRead = 0,
 
+    /* Specify queue size for vendor endpoint write */
+    .queueSizeEndpointWrite= 1,
 };
 
 // </editor-fold>
