@@ -3,11 +3,12 @@
 #include <inttypes.h>
 #include "tuner.h"
 
-#define TUNER_B_W 0b00100010 //SEN pin = 0
-#define TUNER_A_W 0b11000110 //SEN pin = 1
-#define TUNER_B_R 0b00100011 //SEN pin = 0
-#define TUNER_A_R 0b11000111 //SEN pin = 1
+#define TUNER_A_W 0b00100010 //SEN pin = 0
+#define TUNER_B_W 0b11000110 //SEN pin = 1
+#define TUNER_A_R 0b00100011 //SEN pin = 0
+#define TUNER_B_R 0b11000111 //SEN pin = 1
 
+ #define debughalt() __asm__ volatile (" sdbbp 0")
 
 static volatile enum  {
     COM_IDLE,
@@ -20,9 +21,11 @@ static volatile enum  {
     COM_DIR_NONE, COM_DIR_READING, COM_DIR_WRITING
 }com_dir;
 
-static uint8_t  *data_buf;
-static int      ptr = 0;
-static size_t   max_len;
+static volatile Tuner_com_state last_err = TUNER_COM_IDLE;
+
+static volatile uint8_t  *data_buf;
+static volatile int      ptr = 0;
+static volatile size_t   max_len;
 
 static uint8_t addr = 0;
 
@@ -48,10 +51,14 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
 {
 
     if(IFS1bits.I2C1BIF)
+    {
         Nop();
+        IFS1bits.I2C1BIF=0;
+        debughalt();
+    }
 
     if(com_state == COM_IDLE)
-        Nop();
+        debughalt();
 
     switch (com_state)
     {
@@ -61,12 +68,11 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
             break;
 
         case COM_ADDRSND:
-            if(I2C1STATbits.ACKSTAT == 0)
+            if(I2C1STATbits.ACKSTAT == 1)
             {
-                //com_state = COM_STOPPING;
-                //I2C1CONbits.ACKDT = 0; //NAK
                 I2C1CONbits.PEN = 1;
                 com_state = COM_STOPPED;
+                last_err = TUNER_COM_WRONG_ADDR;
                 break;
             }
             else
@@ -74,10 +80,11 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
         case COM_WR:
             if(com_dir == COM_DIR_WRITING)
             {
-                if(I2C1STATbits.ACKSTAT == 0) //TODO ucesat
+                if(I2C1STATbits.ACKSTAT == 1)
                 {
-                    com_state = COM_STOPPING;
-                    I2C1CONbits.ACKDT = 0; //NAK
+                    I2C1CONbits.PEN = 1; //stop
+                    com_state = COM_STOPPED;
+                    last_err = TUNER_COM_WRITE_NAK;
                     break;
                 }
 
@@ -89,8 +96,8 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
                 }
                 else
                 {
-                    com_state = COM_STOPPING;
-                    I2C1CONbits.ACKDT = 0; //NAK
+                    I2C1CONbits.PEN = 1; //stop
+                    com_state = COM_STOPPED;
                 }
             }
             else
@@ -104,17 +111,28 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
             if(ptr<max_len)
             {
                 data_buf[ptr] = I2C1RCV;
+
+                if((data_buf[0]&&0x80)==0 && ptr==0)
+                {   //CTS==0 we have to try it again later
+                    I2C1CONbits.ACKDT = 1; //NAK
+                    I2C1CONbits.ACKEN = 1;
+                    com_state = COM_STOPPING;
+                    last_err = TUNER_COM_DEV_BUSY;
+                    break;
+                }
+
                 ptr++;
+                
             }
 
             if(ptr<max_len)
             {
-                I2C1CONbits.ACKDT = 1;
+                I2C1CONbits.ACKDT = 0; //ACK
                 com_state = COM_WR;
             }
             else
             {
-                I2C1CONbits.ACKDT = 0; //NAK
+                I2C1CONbits.ACKDT = 1; //NAK
                 com_state = COM_STOPPING;
             }
             I2C1CONbits.ACKEN = 1;
@@ -127,7 +145,11 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
             break;
 
         case COM_STOPPED:
+            //I2C1CONbits.ON = 0;
+            //IEC1bits.I2C1MIE = 0;
             com_state = COM_IDLE;
+            if(last_err == TUNER_COM_BUSY)
+                last_err = TUNER_COM_IDLE;
             break;
 
     }
@@ -139,10 +161,14 @@ void tuner_rw_start(void* data, size_t len)
     data_buf = (uint8_t*)data;
     max_len = len;
     ptr = 0;
+    last_err = TUNER_COM_BUSY;
 
     I2C1CONbits.ON = 0;
+
+    IFS1bits.I2C1MIF = 0;
+    IEC1bits.I2C1MIE = 1;
     I2C1CONbits.ON = 1;
-    Nop();
+    Nop(); Nop();
 }
 
 void tuner_write(int tuner_id, void* data, size_t len)
@@ -192,7 +218,10 @@ void tuner_init()
     T5CONbits.ON = 1;
 
     //I2C init
-    I2C1BRG = 0x0C2; //DS 24 str 19: PBclk = 40MHz clk = 100kHz
+    TRISBbits.TRISB8 = 1;
+    TRISBbits.TRISB9 = 1;
+    I2C1BRG = /*0x88B;*/0x0C2; //DS 24 str 19: PBclk = 40MHz clk = 100kHz
+    I2C1CONbits.DISSLW = 0; //because errata
     
     IPC8bits.I2C1IP = 5; //i2c Interrupt priority 5
     
@@ -200,25 +229,78 @@ void tuner_init()
     IEC1bits.I2C1MIE = 1;
     
     IFS1bits.I2C1BIF = 0;
-    IEC1bits.I2C1BIE = 1;
+    IEC1bits.I2C1BIE = 0;
 
     com_dir = COM_DIR_NONE;
     com_state = COM_IDLE;
 
-    char cmd_pwrup[] = {0x01, 0x00, 0x05};
+    volatile char cmd_pwrup[] = {0x01, 0b00000001, 0x05};
+
+   
+
 
     tuner_write(0, &cmd_pwrup, sizeof(cmd_pwrup));
+    while(tuner_com_state() != TUNER_COM_IDLE)
+            Nop();
+     Nop();
+    
+    volatile static  Tuner_read_reply * st;
+    st = &cmd_pwrup;
 
-    while(1)
+    for(i=0; i<10000;i++)
         Nop();
-    tuner_read(1, &cmd_pwrup, sizeof(cmd_pwrup));
 
-    while(com_state != COM_IDLE)
-        Nop();
-    tuner_write(1, &cmd_pwrup, sizeof(cmd_pwrup));
 
-    while(1)
+    while(1){
+        tuner_read(0, &cmd_pwrup, sizeof(cmd_pwrup));
+        while(tuner_com_state() == TUNER_COM_BUSY)
+            Nop();
+
+        if(tuner_com_state() != TUNER_COM_DEV_BUSY)
+            break;
+        for(i=0; i<1000;i++)
+            Nop();
+    }
+    ///////////////////////////////////////////
+    char tune_helax[] = {0x20, 0x00, 0x24, 0x9a, 0x00};
+
+    tuner_write(0, &tune_helax, sizeof(tune_helax));
+    while(tuner_com_state() != TUNER_COM_IDLE)
+            Nop();
+     Nop();
+
+
+    for(i=0; i<10000;i++)
         Nop();
+
+
+    while(1){
+        tuner_read(0, &cmd_pwrup, 1);
+        while(tuner_com_state() == TUNER_COM_BUSY)
+            Nop();
+
+        if(tuner_com_state() != TUNER_COM_DEV_BUSY)
+            break;
+        for(i=0; i<1000;i++)
+            Nop();
+    }
+
+    ///////////////////////////////////////////
+     //debughalt();
+
+    U1TXREG = 'd';
+    //while(1)
+        Nop();
+}
+
+Tuner_com_state tuner_com_state()
+{
+    return last_err;
+}
+
+size_t tuner_rwed_bytes()
+{
+    return ptr+1;
 }
 
 

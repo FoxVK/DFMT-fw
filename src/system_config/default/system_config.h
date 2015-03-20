@@ -94,7 +94,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 /*** Ports System Service Configuration ***/
 
 
-#define SYS_PORT_A_ANSEL        0x0
+#define SYS_PORT_A_ANSEL        0x1
 #define SYS_PORT_A_TRIS         0x1f
 #define SYS_PORT_A_LAT          0x0
 #define SYS_PORT_A_ODC          0x0
@@ -186,7 +186,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 
 
 /* Endpoint Transfer Queue Size combined for Read and write */
-#define USB_DEVICE_ENDPOINT_QUEUE_DEPTH_COMBINED    1
+#define USB_DEVICE_ENDPOINT_QUEUE_DEPTH_COMBINED    2
 
 
 
