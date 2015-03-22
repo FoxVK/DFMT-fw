@@ -111,18 +111,28 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
  * USB Device Function Driver Init Data
  **************************************************/
 /**************************************************
- * USB Device Layer Function Driver Registration 
+ * USB Device Layer Function Driver Registration
  * Table
  **************************************************/
-const USB_DEVICE_FUNCTION_REGISTRATION_TABLE funcRegistrationTable[1] =
+const USB_DEVICE_FUNCTION_REGISTRATION_TABLE funcRegistrationTable[2] =
 {
     /* Function 1 */
-    { 
-        .configurationValue = 1,    /* Configuration value */ 
+    {
+        .configurationValue = 1,    /* Configuration value */
         .interfaceNumber = 0,       /* First interfaceNumber of this function */
         .numberOfInterfaces = 2,    /* Number of interfaces */
-        .speed = USB_SPEED_FULL,    /* Function Speed */ 
+        .speed = USB_SPEED_FULL,    /* Function Speed */
         .funcDriverIndex = 0,  /* Index of Vendor Driver */
+        .driver = NULL,            /* No Function Driver data */
+        .funcDriverInit = NULL     /* No Function Driver Init data */
+    },
+    /* Function 2 */
+    {
+        .configurationValue = 1,    /* Configuration value */
+        .interfaceNumber = 2,       /* First interfaceNumber of this function */
+        .numberOfInterfaces = 1,    /* Number of interfaces */
+        .speed = USB_SPEED_FULL,    /* Function Speed */
+        .funcDriverIndex = 1,  /* Index of Vendor Driver */
         .driver = NULL,            /* No Function Driver data */
         .funcDriverInit = NULL     /* No Function Driver Init data */
     },
@@ -212,8 +222,8 @@ const uint8_t conf_desc[] =
     /* USB Microphone Configuration Descriptor */
     0x09,//sizeof(USB_CFG_DSC),     // Size of this descriptor in bytes
     USB_DESCRIPTOR_CONFIGURATION,   // CONFIGURATION descriptor type
-    0x64,0x00,                      // Total length of data for this cfg
-    2,                              // Number of interfaces in this cfg
+    0x7F/*0x64*/,0x00,                      // Total length of data for this cfg
+    3,//2,                              // Number of interfaces in this cfg
     1,                              // Index value of this configuration
     0,                              // Configuration string index
     USB_ATTRIBUTE_DEFAULT,          // Attributes, see usb_device.h
@@ -240,7 +250,7 @@ const uint8_t conf_desc[] =
     0x01,                           // The number of AudioStreaming interfaces in the Audio Interface Collection to which this AudioControl interface belongs
     0x01,                           // AudioStreaming interface 1 belongs to this AudioControl interface.
 
-    /*USB Microphone Input Terminal Descriptor */ 
+    /*USB Microphone Input Terminal Descriptor */
     0x0C,                           // Size of the descriptor, in bytes
     USB_AUDIO_CS_INTERFACE,         // CS_INTERFACE Descriptor Type
     USB_AUDIO_INPUT_TERMINAL,       // INPUT_TERMINAL descriptor subtype
@@ -319,7 +329,38 @@ const uint8_t conf_desc[] =
     USB_AUDIO_AS_GENERAL,           // GENERAL subtype. (bDescriptorSubtype)
     0x00,                           // No sampling frequency control, no pitch control, no packet padding.(bmAttributes)
     0x00,                           // Unused. (bLockDelayUnits)
-    0x00,0x00                       // Unused. (wLockDelay)
+    0x00,0x00,                      // Unused. (wLockDelay)
+
+    /* USB Standard VC Interface Descripto (TUner control)*/
+    0x09,//sizeof(USB_INTF_DSC),    // Size of this descriptor in bytes
+    USB_DESCRIPTOR_INTERFACE,       // INTERFACE descriptor type
+    TUNER_CONTROL_INTERFACE_ID,     // Interface Number
+    0x00,                           // Alternate Setting Number
+    0x02,                           // Number of endpoints in this intf
+    0xff,                           // Class code - VENDOR
+    0X00,                           // Subclass code - ANTHING
+    0x00,                           // Protocol code
+    0x00,                           // no string descriptor
+
+    /*  USB Standard Endpoint Descriptor (tuner control > host)*/
+    0x09,                           // Size of the descriptor, in bytes (bLength)
+    0x05,                           // ENDPOINT descriptor (bDescriptorType)
+    0x02 | (1<<7),                  // Endpoint number. (bEndpointAddress) | direction
+    0x02,                           // Bulk. (bmAttributes)
+    0x20,0x00,                      // 32 bytes per packet (wMaxPacketSize)
+    0x00,                           // (bInterval) Does not apply to bulk transfer
+    0x00,                           // Unused. (bRefresh)
+    0x00,                           // Unused. (bSynchAddress)
+
+    /*  USB Standard Endpoint Descriptor (tuner control < host)*/
+    0x09,                           // Size of the descriptor, in bytes (bLength)
+    0x05,                           // ENDPOINT descriptor (bDescriptorType)
+    0x02,                           // Endpoint number. (bEndpointAddress) | direction
+    0x02,                           // Bulk. (bmAttributes)
+    0x20,0x00,                      // 32 bytes per packet (wMaxPacketSize)
+    0x00,                           // (bInterval) Does not apply to bulk transfer
+    0x00,                           // Unused. (bRefresh)
+    0x00,                           // Unused. (bSynchAddress)
 };
 
 struct Str_zero
@@ -411,7 +452,7 @@ USB_DEVICE_CONFIGURATION_DESCRIPTORS_TABLE fullSpeedConfigDescSet[1] =
 
 
 /*******************************************
- * USB Device Layer Master Descriptor Table 
+ * USB Device Layer Master Descriptor Table
  *******************************************/
 const USB_DEVICE_MASTER_DESCRIPTOR usbMasterDescriptor =
 {
@@ -485,7 +526,7 @@ const USB_DEVICE_INIT usbDevInitData =
 
     /* Number of function drivers registered to this instance of the
        USB device layer */
-    .registeredFuncCount = 1,
+    .registeredFuncCount = 2,
 
     /* Function driver table registered to this instance of the USB device layer*/
     .registeredFunctions = (USB_DEVICE_FUNCTION_REGISTRATION_TABLE*)funcRegistrationTable,
@@ -497,7 +538,7 @@ const USB_DEVICE_INIT usbDevInitData =
     .deviceSpeed = USB_SPEED_FULL,
 
     /* Specify queue size for vendor endpoint read */
-    .queueSizeEndpointRead = 0,
+    .queueSizeEndpointRead = 1,
 
     /* Specify queue size for vendor endpoint write */
     .queueSizeEndpointWrite= 1,
@@ -590,7 +631,7 @@ void SYS_Initialize ( void* data )
     DRV_USART0_Initialize();
 
     /* Initialize System Services */
-    SYS_INT_Initialize();  
+    SYS_INT_Initialize();
     sysObj.sysConsole0 = SYS_CONSOLE_Initialize(SYS_CONSOLE_INDEX_0, NULL);
 
     sysObj.sysDebug = SYS_DEBUG_Initialize(SYS_DEBUG_INDEX_0, (SYS_MODULE_INIT*)&debugInit);

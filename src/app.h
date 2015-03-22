@@ -87,8 +87,10 @@ typedef struct {
     determine the behavior of the application at various times.
 */
 
+
 #define AUDIO_STREAMING_INTERFACE_ID 1
 #define AUDIO_CONTROL_INTERFACE_ID 0
+#define TUNER_CONTROL_INTERFACE_ID 2
 
 #define ID_INPUT_TERMINAL 1
 #define ID_OUTPUT_TERMINAL 2

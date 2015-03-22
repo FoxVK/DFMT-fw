@@ -169,7 +169,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #define DRV_USB_INTERRUPT_MODE      false
 
 /* Number of Endpoints used */
-#define DRV_USB_ENDPOINTS_NUMBER    2
+#define DRV_USB_ENDPOINTS_NUMBER    3
 
 /*** USB Device Stack Configuration ***/
 
