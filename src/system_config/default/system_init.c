@@ -315,8 +315,8 @@ const uint8_t conf_desc[] =
 
     /*  USB Microphone Standard Endpoint Descriptor */
     0x09,                           // Size of the descriptor, in bytes (bLength)
-    0x05,                           // ENDPOINT descriptor (bDescriptorType)
-    0x01 | (1<<7),                  // Endpoint number. (bEndpointAddress) | direction
+    USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
+    AUDIO_EP,                       // Endpoint number. (bEndpointAddress) | direction
     0x01,                           // Isochronous, not shared. (bmAttributes)
     0x60,0x00,                      // 48*2=96=0x0060 bytes per packet (wMaxPacketSize)
     0x01,                           // One packet per frame.(bInterval)
@@ -344,8 +344,8 @@ const uint8_t conf_desc[] =
 
     /*  USB Standard Endpoint Descriptor (tuner control > host)*/
     0x09,                           // Size of the descriptor, in bytes (bLength)
-    0x05,                           // ENDPOINT descriptor (bDescriptorType)
-    0x02 | (1<<7),                  // Endpoint number. (bEndpointAddress) | direction
+    USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
+    TUNER_EP_IN,                    // Endpoint number. (bEndpointAddress) | direction
     0x02,                           // Bulk. (bmAttributes)
     0x20,0x00,                      // 32 bytes per packet (wMaxPacketSize)
     0x00,                           // (bInterval) Does not apply to bulk transfer
@@ -354,8 +354,8 @@ const uint8_t conf_desc[] =
 
     /*  USB Standard Endpoint Descriptor (tuner control < host)*/
     0x09,                           // Size of the descriptor, in bytes (bLength)
-    0x05,                           // ENDPOINT descriptor (bDescriptorType)
-    0x02,                           // Endpoint number. (bEndpointAddress) | direction
+    USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
+    TUNER_EP_OUT,                   // Endpoint number. (bEndpointAddress) | direction
     0x02,                           // Bulk. (bmAttributes)
     0x20,0x00,                      // 32 bytes per packet (wMaxPacketSize)
     0x00,                           // (bInterval) Does not apply to bulk transfer

@@ -92,8 +92,17 @@ typedef struct {
 #define AUDIO_CONTROL_INTERFACE_ID 0
 #define TUNER_CONTROL_INTERFACE_ID 2
 
+#define AUDIO_EP (0x01|(1<<7))
+#define TUNER_EP_IN (0x02 | (1<<7))
+#define TUNER_EP_OUT 0x02
+
 #define ID_INPUT_TERMINAL 1
 #define ID_OUTPUT_TERMINAL 2
+
+#define TUNEL_TUNER_SELECT_MASK 1
+#define TUNEL_RW_SELECT_MASK 2
+#define TUNEL_PING_MASK 4
+#define TUNEL_ERROR_MASK 128
 
 typedef enum
 {
@@ -130,7 +139,11 @@ typedef struct
     USB_DEVICE_HANDLE   usbDevHandle;
     /* TODO: Define any additional data used by the application. */
     int noData;
-
+    int reading;
+    uint8_t tunel_read_data[32];
+    size_t tunel_read_count;
+    USB_DEVICE_TRANSFER_HANDLE tunel_write_handle;
+    int pingRequest;
 
 } APP_DATA;
 

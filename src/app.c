@@ -154,6 +154,10 @@ void APP_Initialize ( void )
     appData.state = APP_STATE_INIT;
     appData.usbDevHandle = -1;
     appData.noData = 1;
+    appData.reading = 0;
+    appData.pingRequest = 0;
+
+    appData.tunel_write_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
     
     int i,j;
     for(i=0; i<AUDIO_BUFS_COUNT; i++)
@@ -178,10 +182,12 @@ void APP_USBDeviceEventHandler
     switch(event)
     {
         case USB_DEVICE_EVENT_RESET:
-            U1TXREG = 'R';
-            USB_DEVICE_EndpointDisable(appData.usbDevHandle, 0x01|(1<<7));
+            U1TXREG = 'R';         
             //break;
         case USB_DEVICE_EVENT_DECONFIGURED:
+            USB_DEVICE_EndpointDisable(appData.usbDevHandle, AUDIO_EP);
+            USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNER_EP_IN);
+            USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNER_EP_OUT);
             appData.state = APP_STATE_USB_OPENED;
             break;
         case USB_DEVICE_EVENT_CONFIGURED:
@@ -193,7 +199,9 @@ void APP_USBDeviceEventHandler
 
             }
             size_t size = sizeof(AudioBufs[0].sample);
-            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 0, (0x01|(1<<7)), USB_TRANSFER_TYPE_ISOCHRONOUS, size);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 0, AUDIO_EP, USB_TRANSFER_TYPE_ISOCHRONOUS, size);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 1, TUNER_EP_IN, USB_TRANSFER_TYPE_BULK, 32);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 1, TUNER_EP_OUT, USB_TRANSFER_TYPE_BULK, 32);
 
             //appData.state = APP_STATE_CONFIGURED;
             break;
@@ -255,10 +263,40 @@ void APP_USBDeviceEventHandler
             debughalt();
             break;
 
-        case USB_DEVICE_EVENT_ENDPOINT_WRITE_COMPLETE:
-            appData.noData = 1;
-            U1TXREG = 'W';
+        case USB_DEVICE_EVENT_ENDPOINT_READ_COMPLETE:
+        {
+            appData.tunel_read_count = ((USB_DEVICE_EVENT_DATA_ENDPOINT_WRITE_COMPLETE*)eventData)->length;
+            if(appData.tunel_read_data[0]&TUNEL_PING_MASK) //FIXME / no jeslti toto pojede....
+                USB_DEVICE_EndpointWrite(appData.usbDevHandle, &appData.tunel_write_handle, TUNER_EP_IN, &appData.tunel_read_data, appData.tunel_read_count, USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
+
             break;
+        }
+
+        case USB_DEVICE_EVENT_ENDPOINT_WRITE_COMPLETE:
+        {
+            USB_DEVICE_EVENT_DATA_ENDPOINT_WRITE_COMPLETE* ed = (USB_DEVICE_EVENT_DATA_ENDPOINT_WRITE_COMPLETE*)eventData;
+
+            if(appData.tunel_write_handle == ed->transferHandle)
+            {
+                appData.tunel_write_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+            }
+            else
+            {
+                int i;
+                for(i=0; i<AUDIO_BUFS_COUNT; i++)
+                {
+                    if(AudioBufs[i].trasfer_handle == ed->transferHandle)
+                    {
+                        AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+                        AudioBufs[i].isFree = 1;
+                        i=AUDIO_BUFS_COUNT;
+                    }
+                }
+                appData.noData = 1;
+                U1TXREG = 'W';
+            }
+            break;
+        }
         default:
             debughalt();
             break;
