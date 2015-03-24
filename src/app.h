@@ -137,8 +137,10 @@ typedef struct
     APP_STATES state;
     bool suspended;
     USB_DEVICE_HANDLE   usbDevHandle;
-    /* TODO: Define any additional data used by the application. */
-    int noData;
+    
+    bool audio_play;
+
+    int noAudioData;
     int reading;
     uint8_t tunel_read_data[32];
     size_t tunel_read_count;

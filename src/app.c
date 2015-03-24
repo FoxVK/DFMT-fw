@@ -153,7 +153,8 @@ void APP_Initialize ( void )
     /* Place the App state machine in its initial state. */
     appData.state = APP_STATE_INIT;
     appData.usbDevHandle = -1;
-    appData.noData = 1;
+    appData.audio_play = false;
+    appData.noAudioData = 1;
     appData.reading = 0;
     appData.pingRequest = 0;
 
@@ -185,11 +186,26 @@ void APP_USBDeviceEventHandler
             U1TXREG = 'R';         
             //break;
         case USB_DEVICE_EVENT_DECONFIGURED:
+        {
             USB_DEVICE_EndpointDisable(appData.usbDevHandle, AUDIO_EP);
             USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNER_EP_IN);
             USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNER_EP_OUT);
             appData.state = APP_STATE_USB_OPENED;
+            appData.reading = 0;
+            appData.audio_play = false;
+            //TODO simulace cteni zvuku;
+            int i;
+            for(i=0; i<AUDIO_BUFS_COUNT; i++)
+            {
+                if(!AudioBufs[i].trasfer_handle != USB_DEVICE_TRANSFER_HANDLE_INVALID)
+                {
+                    USB_DEVICE_EndpointTransferCancel(appData.usbDevHandle, AUDIO_EP, AudioBufs[i].trasfer_handle);
+                    AudioBufs[i].isFree = 1;
+                    AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+                }
+            }
             break;
+        }
         case USB_DEVICE_EVENT_CONFIGURED:
             U1TXREG = '+';
             /* check the configuration */
@@ -199,11 +215,11 @@ void APP_USBDeviceEventHandler
 
             }
             size_t size = sizeof(AudioBufs[0].sample);
-            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 0, AUDIO_EP, USB_TRANSFER_TYPE_ISOCHRONOUS, size);
-            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 1, TUNER_EP_IN, USB_TRANSFER_TYPE_BULK, 32);
-            USB_DEVICE_EndpointEnable(appData.usbDevHandle, 1, TUNER_EP_OUT, USB_TRANSFER_TYPE_BULK, 32);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, AUDIO_STREAMING_INTERFACE_ID, AUDIO_EP, USB_TRANSFER_TYPE_ISOCHRONOUS, size);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, TUNER_CONTROL_INTERFACE_ID, TUNER_EP_IN, USB_TRANSFER_TYPE_BULK, 32);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, TUNER_CONTROL_INTERFACE_ID, TUNER_EP_OUT, USB_TRANSFER_TYPE_BULK, 32);
 
-            //appData.state = APP_STATE_CONFIGURED;
+            appData.state = APP_STATE_CONFIGURED;
             break;
         case USB_DEVICE_EVENT_SUSPENDED:
             U1TXREG = 'S';
@@ -234,18 +250,27 @@ void APP_USBDeviceEventHandler
 
                 if(sp->wValue == 0)
                 {
-                    appData.state == APP_STATE_CONFIGURED;
-                    //
+                    int i;
+                    appData.audio_play = false;
+
                     USB_DEVICE_ControlStatus(appData.usbDevHandle, USB_DEVICE_CONTROL_STATUS_OK);
-                    //USB_DEVICE_EndpointDisable(appData.usbDevHandle, 0x01|(1<<7));
+                    /*for(i=0; i<AUDIO_BUFS_COUNT; i++)
+                    {
+                        if(!AudioBufs[i].trasfer_handle != USB_DEVICE_TRANSFER_HANDLE_INVALID)
+                        {
+                            USB_DEVICE_EndpointTransferCancel(appData.usbDevHandle, AUDIO_EP, AudioBufs[i].trasfer_handle);
+                            AudioBufs[i].isFree = 1;
+                            AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+                        }
+                    }*/
                     U1TXREG = 'C';
                 }
                 else if(sp->wValue == 1)
                 {
-                    appData.state = APP_STATE_PLAY;
+                    appData.audio_play = true;
                     USB_DEVICE_ControlStatus(appData.usbDevHandle, USB_DEVICE_CONTROL_STATUS_OK);
                     
-                    appData.noData = 1;
+                    appData.noAudioData = 1;
                     U1TXREG = 'p';
                 }
                 else
@@ -266,9 +291,11 @@ void APP_USBDeviceEventHandler
         case USB_DEVICE_EVENT_ENDPOINT_READ_COMPLETE:
         {
             appData.tunel_read_count = ((USB_DEVICE_EVENT_DATA_ENDPOINT_WRITE_COMPLETE*)eventData)->length;
-            if(appData.tunel_read_data[0]&TUNEL_PING_MASK) //FIXME / no jeslti toto pojede....
-                USB_DEVICE_EndpointWrite(appData.usbDevHandle, &appData.tunel_write_handle, TUNER_EP_IN, &appData.tunel_read_data, appData.tunel_read_count, USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
+            if(appData.tunel_read_data[0]&TUNEL_PING_MASK)
+                appData.pingRequest = 1;
 
+            appData.reading = 0;
+            U1TXREG = 'I';
             break;
         }
 
@@ -279,6 +306,7 @@ void APP_USBDeviceEventHandler
             if(appData.tunel_write_handle == ed->transferHandle)
             {
                 appData.tunel_write_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+                U1TXREG = 'W';
             }
             else
             {
@@ -292,8 +320,8 @@ void APP_USBDeviceEventHandler
                         i=AUDIO_BUFS_COUNT;
                     }
                 }
-                appData.noData = 1;
-                U1TXREG = 'W';
+                appData.noAudioData = 1;
+                //U1TXREG = 'W';
             }
             break;
         }
@@ -336,46 +364,90 @@ void APP_Tasks ( void )
             }
             break;
         }
-
-        case APP_STATE_PLAY:
-        {
-
-
-            if(!appData.noData)
-                break;
-            static int b = 0;
-
-            static void * data;
-            data =  &(AudioBufs[b].sample);
-            static size_t size ;
-            size = sizeof(AudioBufs[b].sample);
-            static USB_DEVICE_TRANSFER_HANDLE *handle;
-            handle = &(AudioBufs[b].trasfer_handle);
             
-            //USB_DEVICE_AUDIO_RESULT r ;//= USB_DEVICE_AUDIO_Write(0, handle, AUDIO_STREAMING_INTERFACE_ID, data, size);
-            BDT = (U1BDTP1<<8) | 0xA0000000;//((BufferDT *)((USB_DEVICE_OBJ *)appData.usbDevHandle)->usbCDHandle);11
-            BDT+=1;
-            USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(appData.usbDevHandle, handle, 0x01|(1<<7),data, size, USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
-            //debughalt();
-            if(r == USB_DEVICE_RESULT_OK)
+        
+        case APP_STATE_CONFIGURED:
+        {
+            if(appData.audio_play && appData.noAudioData)
             {
+
+                static int b = 0;
+                for(b=0; b<AUDIO_BUFS_COUNT;b++)
+                {
+                    if((!AudioBufs[b].isFree) && AudioBufs[b].trasfer_handle == USB_DEVICE_TRANSFER_HANDLE_INVALID)
+                    {
+                        static void * data;
+                        data =  &(AudioBufs[b].sample);
+                        static size_t size ;
+                        size = sizeof(AudioBufs[b].sample);
+                        static USB_DEVICE_TRANSFER_HANDLE *handle;
+                        handle = &(AudioBufs[b].trasfer_handle);
+
+                        USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(appData.usbDevHandle, handle, AUDIO_EP,data, size, USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
+                        //debughalt();
+                        if(r == USB_DEVICE_RESULT_OK)
+                        {
+                            //U1TXREG = 'w';
+                            //U1TXREG = '0'+b;
+                            b++;
+                            if(b >= AUDIO_BUFS_COUNT) b=0;
+                            appData.noAudioData = 0;
+
+                        }
+                        else if (r == USB_DEVICE_RESULT_ERROR_TRANSFER_QUEUE_FULL)
+                        {
+                            //U1TXREG = 'f';
+                            appData.noAudioData = 0;
+                            AudioBufs[b].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+                        }
+                        else
+                        {
+                            //U1TXREG = 'e';
+                            AudioBufs[b].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+                        }
+                        b = AUDIO_BUFS_COUNT;
+                    }
+                }
+
+
+            }
+
+            if(!appData.reading)
+            {
+                static USB_DEVICE_TRANSFER_HANDLE h; //we do not need handle
+                volatile USB_DEVICE_RESULT r  = USB_DEVICE_EndpointRead(appData.usbDevHandle, &h, TUNER_EP_OUT, appData.tunel_read_data, sizeof(appData.tunel_read_data));
+                if(r!=USB_DEVICE_RESULT_OK)
+                    Nop();
+                appData.reading = 1;
+                U1TXREG = 'i';
+            }
+
+            if(appData.pingRequest)
+            {
+                volatile USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(   appData.usbDevHandle, &appData.tunel_write_handle,
+                                            TUNER_EP_IN,
+                                            &appData.tunel_read_data, appData.tunel_read_count,
+                                            USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
+                if(r!=USB_DEVICE_RESULT_OK)
+                    Nop();
                 U1TXREG = 'w';
-                U1TXREG = '0'+b;
-                b++;
-                if(b >= AUDIO_BUFS_COUNT) b=0;
-                appData.noData = 0;
                 
+                appData.pingRequest = 0;
+
             }
-            else if (r == USB_DEVICE_RESULT_ERROR_TRANSFER_QUEUE_FULL)
+
+            //TODO simulace cteni zvuku;
+            int i;
+            for(i=0; i<AUDIO_BUFS_COUNT; i++)
             {
-                U1TXREG = 'f';
-                appData.noData = 0;
+                if(AudioBufs[i].isFree)
+                {
+                    AudioBufs[i].isFree = 0;
+                    i = AUDIO_BUFS_COUNT;
+                }
             }
-            else
-            {
-                U1TXREG = 'e';
-            }
-            break;
+
+            break; //APP_STATE_CONFIGURED
         }
             
 

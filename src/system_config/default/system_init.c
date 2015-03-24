@@ -541,7 +541,7 @@ const USB_DEVICE_INIT usbDevInitData =
     .queueSizeEndpointRead = 1,
 
     /* Specify queue size for vendor endpoint write */
-    .queueSizeEndpointWrite= 1,
+    .queueSizeEndpointWrite= 10,
 };
 
 // </editor-fold>
