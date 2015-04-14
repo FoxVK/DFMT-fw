@@ -51,6 +51,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #include "system_definitions.h"
 #include "app.h"
 #include "usb_desc_structs.h"
+#include "shared.h"
 
 
 // ****************************************************************************
@@ -96,7 +97,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #pragma config PMDL1WAY =   OFF
 #pragma config IOL1WAY =    OFF
 #pragma config FUSBIDIO =   OFF
-#pragma config FVBUSONIO =  ON
+#pragma config FVBUSONIO =  OFF
 
 
 // *****************************************************************************
@@ -152,9 +153,9 @@ const USB_dev_decriptor dev_desc =
     .bDeviceSubClass    = 0x00,
     .bDeviceProtocol    = 0x00,
     .bMaxPacketSize0    = 64,
-    .idVendor           = 0x0a06, //FIXME
-    .idProduct          = 0xff02, //FIXME
-    .bcdDevice          = 0x0001,
+    .idVendor           = USB_VID, 
+    .idProduct          = USB_PID,
+    .bcdDevice          = 0x0002,
     .iManufacturer      = 1,
     .iProduct           = 2,
     .iSerialNumber      = 0,
@@ -345,7 +346,7 @@ const uint8_t conf_desc[] =
     /*  USB Standard Endpoint Descriptor (tuner control > host)*/
     0x09,                           // Size of the descriptor, in bytes (bLength)
     USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
-    TUNER_EP_IN,                    // Endpoint number. (bEndpointAddress) | direction
+    TUNNEL_EP_IN,                    // Endpoint number. (bEndpointAddress) | direction
     0x02,                           // Bulk. (bmAttributes)
     0x20,0x00,                      // 32 bytes per packet (wMaxPacketSize)
     0x00,                           // (bInterval) Does not apply to bulk transfer
@@ -355,7 +356,7 @@ const uint8_t conf_desc[] =
     /*  USB Standard Endpoint Descriptor (tuner control < host)*/
     0x09,                           // Size of the descriptor, in bytes (bLength)
     USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
-    TUNER_EP_OUT,                   // Endpoint number. (bEndpointAddress) | direction
+    TUNNEL_EP_OUT,                   // Endpoint number. (bEndpointAddress) | direction
     0x02,                           // Bulk. (bmAttributes)
     0x20,0x00,                      // 32 bytes per packet (wMaxPacketSize)
     0x00,                           // (bInterval) Does not apply to bulk transfer

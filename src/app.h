@@ -60,6 +60,7 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #include "system_definitions.h"
 
 #include "tuner.h"
+#include "shared.h"
 
 // *****************************************************************************
 // *****************************************************************************
@@ -90,19 +91,12 @@ typedef struct {
 
 #define AUDIO_STREAMING_INTERFACE_ID 1
 #define AUDIO_CONTROL_INTERFACE_ID 0
-#define TUNER_CONTROL_INTERFACE_ID 2
+#define TUNER_CONTROL_INTERFACE_ID TUNNEL_INTERFACE_ID
 
 #define AUDIO_EP (0x01|(1<<7))
-#define TUNER_EP_IN (0x02 | (1<<7))
-#define TUNER_EP_OUT 0x02
 
 #define ID_INPUT_TERMINAL 1
 #define ID_OUTPUT_TERMINAL 2
-
-#define TUNEL_TUNER_SELECT_MASK 1
-#define TUNEL_RW_SELECT_MASK 2
-#define TUNEL_PING_MASK 4
-#define TUNEL_ERROR_MASK 128
 
 typedef enum
 {
@@ -142,10 +136,15 @@ typedef struct
 
     int noAudioData;
     int reading;
-    uint8_t tunel_read_data[32];
-    size_t tunel_read_count;
-    USB_DEVICE_TRANSFER_HANDLE tunel_write_handle;
+    uint8_t tunnel_read_data[32];
+    uint8_t tunnel_write_data[15];
+    size_t tunnel_read_count;
+    USB_DEVICE_TRANSFER_HANDLE tunnel_write_handle;
     int pingRequest;
+    int tuner_request;
+    int tuner_wait_for_reply;
+
+    int tuner_ready;
 
 } APP_DATA;
 
@@ -231,6 +230,8 @@ void APP_Initialize ( void );
 
 void APP_Tasks( void );
 
+
+void APP_Task_configured_state( void );
 
 #endif /* _APP_H */
 /*******************************************************************************

@@ -111,7 +111,7 @@
     <Template>
       <Name>system_config.h</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>6178B9B27A82C7957150685551BB88C0</Checksum>
+      <Checksum>09E4B793943E92FB912DF958D76EACE3</Checksum>
     </Template>
     <Template>
       <Name>system_interrupt.c</Name>
@@ -144,7 +144,7 @@
     <Template>
       <Name>system_init.c</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>9AA4C6E5194CD16A8792806482BD8B9B</Checksum>
+      <Checksum>DF0C701610F24FB7C01639508F849B39</Checksum>
     </Template>
     <Template>
       <Name>system_definitions.h</Name>
@@ -162,6 +162,6 @@
     </Template>
   </Templates>
   <Libraries>
-    <Library value="../../../../bin/framework/peripheral/PIC32MX220F032B_peripherals.a"/>
+    <Library value="../../../../bin/framework/peripheral/PIC32MX250F128B_peripherals.a"/>
   </Libraries>
 </configuration>

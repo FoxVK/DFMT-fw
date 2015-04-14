@@ -8,6 +8,8 @@
 #define TUNER_A_R 0b00100011 //SEN pin = 0
 #define TUNER_B_R 0b11000111 //SEN pin = 1
 
+#define I2S_BUF_SIZE (2*2*48)
+
  #define debughalt() __asm__ volatile (" sdbbp 0")
 
 static volatile enum  {
@@ -29,6 +31,15 @@ static volatile size_t   max_len;
 
 static uint8_t addr = 0;
 
+
+static volatile struct  {
+    uint8_t buf[I2S_BUF_SIZE];
+    size_t head;
+    size_t count;  //count of unreaden bytes
+}  audio_data[2];
+
+
+
 /*
 Turn on the I 2 C module by setting the ON bit (I2CxCON<15>) to ?1?.
 Assert a Start condition on SDAx and SCLx.
@@ -47,7 +58,7 @@ Generate a Stop condition on SDAx and SCLx.
  */
 
 
-void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
+void __ISR (_I2C_1_VECTOR, IPL3AUTO) I2C1Handler (void)
 {
 
     if(IFS1bits.I2C1BIF)
@@ -156,6 +167,34 @@ void __ISR (_I2C_1_VECTOR, IPL5AUTO) I2C1Handler (void)
     IFS1bits.I2C1MIF = 0;
 }
 
+void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2S1Handler (void)
+{
+    //debughalt();
+    static int limit = 0;
+    while(!SPI1STATbits.SPIRBE)
+    {
+        static volatile unsigned int s ;
+        s = SPI1BUF;
+
+        audio_data[0].buf[audio_data[0].head] = (uint8_t)s;
+        audio_data[0].count++;
+        audio_data[0].head++;
+        Nop();
+
+        if(audio_data[0].head >= I2S_BUF_SIZE)
+            audio_data[0].head = 0;
+
+        if(audio_data[0].count>= I2S_BUF_SIZE)
+            audio_data[0].count = I2S_BUF_SIZE;
+
+        if(limit<200)
+            limit++;
+        else
+            Nop();
+    }
+    IFS1bits.SPI1RXIF = 0;
+}
+
 void tuner_rw_start(void* data, size_t len)
 {
     data_buf = (uint8_t*)data;
@@ -198,17 +237,12 @@ int tuner_bytes_received()
         return -1;
 }
 
-void tuner_init()
+static void timer_rclk_init()
 {
-    int i;
-    //TODO dokonfigurovat pocatecni hodnotu na low
-    PORTBbits.RB13 = 0; //tuners reset active
-    for(i=0; i<1000; i++)Nop(); //delay
-    PORTBbits.RB13 = 1; //tuners reset inactive
-    for(i=0; i<1000; i++)Nop(); //delay
-
     //timer5 init
-    IPC5SET = 0x1F; //maximal interrupt priority
+    //IPC5SET = 0x1F; //maximal interrupt priority
+    IPC5bits.T5IP = 7; //prioriy 1-7 0=disabled
+    IPC5bits.T5IS = 3; //sub prio 0-3
     //T5CONbits.TCKPS = 0b011; //1:8
     PR5 = 610; //2*32.768kHz
     TMR5 = 0;
@@ -216,81 +250,140 @@ void tuner_init()
     IFS0bits.T5IF = 0;
     IEC0bits.T5IE = 1;
     T5CONbits.ON = 1;
+}
 
+static void i2c_init()
+{
     //I2C init
     TRISBbits.TRISB8 = 1;
     TRISBbits.TRISB9 = 1;
     I2C1BRG = /*0x88B;*/0x0C2; //DS 24 str 19: PBclk = 40MHz clk = 100kHz
     I2C1CONbits.DISSLW = 0; //because errata
-    
-    IPC8bits.I2C1IP = 5; //i2c Interrupt priority 5
-    
-    IFS1bits.I2C1MIF = 0;    
+
+    IPC8bits.I2C1IP = 2; //prioriy 1-7 0=disabled
+
+    IFS1bits.I2C1MIF = 0;
     IEC1bits.I2C1MIE = 1;
-    
+
     IFS1bits.I2C1BIF = 0;
     IEC1bits.I2C1BIE = 0;
 
     com_dir = COM_DIR_NONE;
     com_state = COM_IDLE;
+}
 
-    volatile char cmd_pwrup[] = {0x01, 0b00000001, 0x05};
+static void i2s_a_init()
+{
+    SPI1CONbits.ON = 0;
+    Nop();
+    SPI1CONbits.DISSDO = 1;     //dissable output bit
+    SPI1CONbits.ENHBUF = 1;     //enchanced buffer enable
+    SPI1CONbits.MSTEN = 1;      //enable master - we will generate clock
+    SPI1CON2bits.AUDEN = 1;     //enable audio
+    SPI1CONbits.SRXISEL = 2;    //interrupt is generated whe buffer is half full
+    SPI1CONbits.CKP = 1;        //clock idle in low
 
-   
-
-
-    tuner_write(0, &cmd_pwrup, sizeof(cmd_pwrup));
-    while(tuner_com_state() != TUNER_COM_IDLE)
-            Nop();
-     Nop();
+    while(!SPI1STATbits.SPIRBE)
+    {
+        int flush = SPI1BUF;
+    }
+    SPI1STATbits.SPIROV = 0;    //no overflow
     
-    volatile static  Tuner_read_reply * st;
-    st = &cmd_pwrup;
+    SPI1BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1538,46
 
-    for(i=0; i<10000;i++)
-        Nop();
+    IPC7bits.SPI1IP = 5; //prioriy 1-7 0=disabled
+    IPC7bits.SPI1IS = 0; //subprio 0-3
+    
+    IEC1bits.SPI1RXIE = 1; //enable Rx interrupt
+}
 
+//Start or stop capturing I2S audio
+void tuner_audio_run(int tuner_id, int state)
+{
+    audio_data[tuner_id].head = 0;
+    audio_data[tuner_id].count = 0;
 
-    while(1){
-        tuner_read(0, &cmd_pwrup, sizeof(cmd_pwrup));
-        while(tuner_com_state() == TUNER_COM_BUSY)
-            Nop();
-
-        if(tuner_com_state() != TUNER_COM_DEV_BUSY)
-            break;
-        for(i=0; i<1000;i++)
-            Nop();
+    if(tuner_id == 0)
+    {
+        IFS1CLR = 0b111 << 4;
+        SPI1CONbits.ON = state;
     }
-    ///////////////////////////////////////////
-    char tune_helax[] = {0x20, 0x00, 0x24, 0x9a, 0x00};
+    else
+    {
+        IFS1CLR = 0b111 << 18;
+        SPI2CONbits.ON = state;
+    }        
+}
 
-    tuner_write(0, &tune_helax, sizeof(tune_helax));
-    while(tuner_com_state() != TUNER_COM_IDLE)
-            Nop();
-     Nop();
+size_t tuner_audio_get(const int tuner_id, void*buf, size_t max)
+{
+    uint8_t * b = buf;
 
+    if(tuner_id)
+    {
+        if(!SPI2CONbits.ON)
+            return 0;
+    }
+    else
+    {
+        if(!SPI1CONbits.ON)
+            return 0;
+    }
+    //begin critical section
+    if(tuner_id)
+        IEC1bits.SPI2RXIE = 0;
+    else
+        IEC1bits.SPI1RXIE = 0;
+    
+        int ptr = audio_data[tuner_id].head;
+        int count = audio_data[tuner_id].count;
 
-    for(i=0; i<10000;i++)
-        Nop();
+        if (count>max)
+            count = max;
 
+        audio_data[tuner_id].count -= count;
 
-    while(1){
-        tuner_read(0, &cmd_pwrup, 1);
-        while(tuner_com_state() == TUNER_COM_BUSY)
-            Nop();
+    if(tuner_id)
+        IEC1bits.SPI2RXIE = 1;
+    else
+        IEC1bits.SPI1RXIE = 1;
+    //end critical section
 
-        if(tuner_com_state() != TUNER_COM_DEV_BUSY)
-            break;
-        for(i=0; i<1000;i++)
-            Nop();
+    ptr -= count;
+    if(ptr<0)
+        ptr += I2S_BUF_SIZE;
+
+    int i;
+    for(i=0; i<count; i++)
+    {
+        b[i]=audio_data[tuner_id].buf[ptr];
+        ptr++;
+        if(ptr>=I2S_BUF_SIZE)
+            ptr=0;
     }
 
-    ///////////////////////////////////////////
-     //debughalt();
+    return count;
+}
 
-    U1TXREG = 'd';
-    //while(1)
-        Nop();
+void tuner_hold_in_rst(int state)
+{
+    PORTBbits.RB13 = state ? 0 : 1;
+}
+
+void tuner_init()
+{
+    int i;
+    //TODO dokonfigurovat pocatecni hodnotu na low
+    tuner_hold_in_rst(1); //tuners reset active
+    for(i=0; i<1000; i++)Nop(); //delay
+    tuner_hold_in_rst(0); //tuners reset inactive
+    for(i=0; i<1000; i++)Nop(); //delay
+
+    timer_rclk_init();
+
+    i2c_init();
+
+    i2s_a_init();
 }
 
 Tuner_com_state tuner_com_state()

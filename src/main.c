@@ -82,7 +82,7 @@ void _general_exception_handler (unsigned cause, unsigned status)
 
     switch((cause & 0x7c)>>2)
     {
-        /*case 0 : SYS_DEBUG_Message("interrupt"); break;
+        case 0 : SYS_DEBUG_Message("interrupt"); break;
         case 4 : SYS_DEBUG_Message("address error exception (load or ifetch)"); break;
         case 5 : SYS_DEBUG_Message("address error exception (store)"); break;
         case 6 : SYS_DEBUG_Message("bus error (ifetch)"); break;
@@ -95,7 +95,7 @@ void _general_exception_handler (unsigned cause, unsigned status)
         case 13: SYS_DEBUG_Message("trap (possible divide by zero)"); break;
         case 16: SYS_DEBUG_Message("implementation specfic 1"); break;
         case 17: SYS_DEBUG_Message("CorExtend Unuseable"); break;
-        case 18: SYS_DEBUG_Message("coprocessor 2"); break;*/
+        case 18: SYS_DEBUG_Message("coprocessor 2"); break;
         default: SYS_DEBUG_Message("Unknown reason"); break;
     }
 
@@ -108,6 +108,26 @@ int main ( void )
     RCON = 0;
     /* Initialize all MPLAB Harmony modules, including application(s). */
     SYS_Initialize ( NULL );
+
+    //We do not need any analog pin
+    ANSELA = 0;
+    ANSELB = 0;
+
+    PORTBbits.RB14 = 0;    
+
+    TRISAbits.TRISA1 = 1;   //SDI1
+    TRISBbits.TRISB3 = 0;   //SS 1
+    TRISBbits.TRISB14 = 0;  //SCK1
+
+    SYSKEY = 0x33333333; //write invalid key to force lock
+    SYSKEY = 0xAA996655; //write key1 to SYSKEY
+    SYSKEY = 0x556699AA; //write key2 to SYSKEY
+
+    SDI1Rbits.SDI1R = 0b0001;    //SDI1 on RB5
+    RPB3Rbits.RPB3R = 0b0011;    //SS 1 on RB3
+
+    SYSKEY = 0x33333333; //write invalid key to force lock
+
 
     /*TRISAbits.TRISA0 = 0;
 
