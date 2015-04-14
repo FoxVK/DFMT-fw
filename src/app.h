@@ -70,8 +70,8 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 
 typedef struct {
     struct {
-        uint8_t l;
-        uint8_t r;
+        int16_t l;
+        int16_t r;
     }sample[48];
     int isFree;
     USB_DEVICE_TRANSFER_HANDLE trasfer_handle;

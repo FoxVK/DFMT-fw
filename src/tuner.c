@@ -33,7 +33,7 @@ static uint8_t addr = 0;
 
 
 static volatile struct  {
-    uint8_t buf[I2S_BUF_SIZE];
+    int16_t buf[I2S_BUF_SIZE];
     size_t head;
     size_t count;  //count of unreaden bytes
 }  audio_data[2];
@@ -169,14 +169,12 @@ void __ISR (_I2C_1_VECTOR, IPL3AUTO) I2C1Handler (void)
 
 void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2S1Handler (void)
 {
-    //debughalt();
-    static int limit = 0;
     while(!SPI1STATbits.SPIRBE)
     {
-        static volatile unsigned int s ;
+        int16_t s ;
         s = SPI1BUF;
 
-        audio_data[0].buf[audio_data[0].head] = (uint8_t)s;
+        audio_data[0].buf[audio_data[0].head] = s;
         audio_data[0].count++;
         audio_data[0].head++;
         Nop();
@@ -186,11 +184,6 @@ void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2S1Handler (void)
 
         if(audio_data[0].count>= I2S_BUF_SIZE)
             audio_data[0].count = I2S_BUF_SIZE;
-
-        if(limit<200)
-            limit++;
-        else
-            Nop();
     }
     IFS1bits.SPI1RXIF = 0;
 }
@@ -317,7 +310,8 @@ void tuner_audio_run(int tuner_id, int state)
 
 size_t tuner_audio_get(const int tuner_id, void*buf, size_t max)
 {
-    uint8_t * b = buf;
+    max >>=1;
+    int16_t * b = buf;
 
     if(tuner_id)
     {

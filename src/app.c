@@ -429,7 +429,7 @@ void APP_Task_configured_state( void )
 
         AudioDataBufs *b = &AudioBufs[0];
         
-        int i = tuner_audio_get(0, b->sample, 48*2);
+        int i = tuner_audio_get(0, b->sample, sizeof(AudioBufs[0].sample));
 
         for(;i<48;i++)
             b->sample[i].l = b->sample[i].r = 125; //TODO remove this

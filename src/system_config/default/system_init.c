@@ -212,7 +212,7 @@ typedef enum
 {
     USB_AUDIO_AS_DESCRIPTOR_UNDEFINED    = 0x00,
     USB_AUDIO_AS_GENERAL                 = 0x01,
-    USB_AUDIO_FORMAT_TYPE                = 0x02,
+    USB_AUDIO_FORMAT_TYPE                = 0x02, 
     USB_AUDIO_FORMAT_SPECIFIC            = 0x03
 
 } USB_AUDIO_CS_AS_INTERFACE_DESCRIPTOR_SUBTYPE;
@@ -301,7 +301,7 @@ const uint8_t conf_desc[] =
     USB_AUDIO_AS_GENERAL,           // GENERAL subtype (bDescriptorSubtype)
     ID_OUTPUT_TERMINAL,             // Unit ID of the Output Terminal.(bTerminalLink)
     0x01,                           // Interface delay. (bDelay)
-    0x02, 0x00,                     // PCM8 (formats str29)
+    0x01, 0x00,                     // PCM (formats str29)
 
     /*  USB Microphone Type I Format Type Descriptor */
     0x0B,                           // Size of the descriptor, in bytes (bLength)
@@ -309,8 +309,8 @@ const uint8_t conf_desc[] =
     USB_AUDIO_FORMAT_TYPE,          // FORMAT_TYPE subtype. (bDescriptorSubtype)
     0x01,                           // FORMAT_TYPE_I. (bFormatType)
     0x02,                           // two ch (bNrChannels)
-    0x01,                           // One byte per audio subframe.(bSubFrameSize)
-    0x08,                           // 8 bits per sample.(bBitResolution)
+    0x02,                           // Two bytes per audio subframe.(bSubFrameSize)
+    0x10,                           // 16 bits per sample.(bBitResolution)
     0x01,                           // One frequency supported. (bSamFreqType)
     0x80,0xBB,0x00,                 // 48khz = BB80 (tSamFreq)
 
@@ -319,7 +319,7 @@ const uint8_t conf_desc[] =
     USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
     AUDIO_EP,                       // Endpoint number. (bEndpointAddress) | direction
     0x01,                           // Isochronous, not shared. (bmAttributes)
-    0x60,0x00,                      // 48*2=96=0x0060 bytes per packet (wMaxPacketSize)
+    0xC0,0x00,                      // 48*4=192=0x00C0 bytes per packet (wMaxPacketSize)
     0x01,                           // One packet per frame.(bInterval)
     0x00,                           // Unused. (bRefresh)
     0x00,                           // Unused. (bSynchAddress)
@@ -332,7 +332,7 @@ const uint8_t conf_desc[] =
     0x00,                           // Unused. (bLockDelayUnits)
     0x00,0x00,                      // Unused. (wLockDelay)
 
-    /* USB Standard VC Interface Descripto (TUner control)*/
+    /* USB Standard VC Interface Descripto (Tuner control)*/
     0x09,//sizeof(USB_INTF_DSC),    // Size of this descriptor in bytes
     USB_DESCRIPTOR_INTERFACE,       // INTERFACE descriptor type
     TUNER_CONTROL_INTERFACE_ID,     // Interface Number
