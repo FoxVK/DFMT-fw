@@ -193,9 +193,6 @@ void APP_USBDeviceEventHandler
             //break;
         case USB_DEVICE_EVENT_DECONFIGURED:
         {
-            USB_DEVICE_EndpointDisable(appData.usbDevHandle, AUDIO_EP);
-            USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNNEL_EP_IN);
-            USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNNEL_EP_OUT);
             appData.state = APP_STATE_USB_OPENED;
             appData.reading = 0;
             appData.audio_play = false;
@@ -210,6 +207,12 @@ void APP_USBDeviceEventHandler
                     AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
                 }
             }
+            USB_DEVICE_EndpointDisable(appData.usbDevHandle, AUDIO_EP);
+
+            if(appData.tunnel_write_handle != USB_DEVICE_TRANSFER_HANDLE_INVALID)
+                USB_DEVICE_EndpointTransferCancel(appData.usbDevHandle, TUNNEL_EP_IN, appData.tunnel_write_handle);
+            USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNNEL_EP_IN);
+            USB_DEVICE_EndpointDisable(appData.usbDevHandle, TUNNEL_EP_OUT);
             break;
         }
         case USB_DEVICE_EVENT_CONFIGURED:
@@ -427,8 +430,35 @@ void APP_Task_configured_state( void )
             }
         }*/
 
-        AudioDataBufs *b = &AudioBufs[0];
+        /*static AudioDataBufs *filled = NULL;
+        if(filled==NULL)
+        {
+            filled = &AudioBufs[0];
+        }
         
+        AudioDataBufs *toFill, *toSend = filled;
+        toFill = (filled == &AudioBufs[0]) ? &AudioBufs[1] : &AudioBufs[0];
+
+        int i = 0;
+        for(;i<48;i++)
+            toFill->sample[i].l = toFill->sample[i].r = 32767;
+
+        tuner_audio_setbuf(0, (uint16_t*)toFill->sample);
+
+        USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(
+                appData.usbDevHandle,
+                &toSend->trasfer_handle,
+                AUDIO_EP,
+                toSend->sample,
+                sizeof(toSend->sample),
+                USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
+
+        filled = toFill;
+
+        appData.noAudioData = 0;
+        toSend->trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;*/
+        
+        AudioDataBufs *b = &AudioBufs[0];
         int i = tuner_audio_get(0, b->sample, sizeof(AudioBufs[0].sample));
 
         for(;i<48;i++)
@@ -439,7 +469,7 @@ void APP_Task_configured_state( void )
                 &b->trasfer_handle,
                 AUDIO_EP,
                 b->sample,
-                48*2,
+                sizeof(b->sample),
                 USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
 
         appData.noAudioData = 0;
@@ -530,7 +560,7 @@ void APP_Task_configured_state( void )
         }     
     }
 
-    //TODO simulace cteni zvuku;
+    //simulace cteni zvuku;
     /*
     int i;
     for(i=0; i<AUDIO_BUFS_COUNT; i++)
@@ -545,15 +575,13 @@ void APP_Task_configured_state( void )
 }
 
 void app_tuner_updown_tasks()
-{
-#warning AZ TO BUDES ZKOUSET PRIPOJ SI ODPOR NA RESET !!!
-    
-    static uint8_t cmd_power_up[]   = {0x01, 0x00, 0xB0};
+{    
+    static uint8_t cmd_power_up[]   = {0x01, 0x00, 0xB5};
     static uint8_t cmd_power_down[] = {0x11};
     static uint8_t cmd_tune[]       = {0x20,0x01,0x24,0x9A,0x00}; //0x01 = inaccurate but fast tunning alowed to 93.7
     static uint8_t cmd_int_update[] = {0x14};
     static uint8_t cmd_int_clear[]  = {0x22, 0x01};
-    static uint8_t cmd_dosr[]       = {0x12, 0x00, 0x01, 0x04, 0xBB, 0x80}; //FIXME 48000 = 0xBB80
+    static uint8_t cmd_dosr[]       = {0x12, 0x00, 0x01, 0x04, 0xBB, 0x80}; 
     static Tuner_read_reply reply;
     static int wait_for_ready = 0;
     static int tuner_id = 0;

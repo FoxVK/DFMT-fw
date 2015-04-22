@@ -232,6 +232,7 @@ void APP_Tasks( void );
 
 
 void APP_Task_configured_state( void );
+void app_tuner_updown_tasks();
 
 #endif /* _APP_H */
 /*******************************************************************************

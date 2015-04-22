@@ -23,6 +23,7 @@ size_t tuner_rwed_bytes();
 
 void tuner_audio_run(int tuner_id, int state);
 size_t tuner_audio_get(const int tuner_id, void* buf, size_t max);
+uint16_t * tuner_audio_setbuf(int tuner_id, uint16_t* buf);
 
 #ifdef	__cplusplus
 }

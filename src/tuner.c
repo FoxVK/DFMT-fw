@@ -38,6 +38,8 @@ static volatile struct  {
     size_t count;  //count of unreaden bytes
 }  audio_data[2];
 
+static volatile uint16_t * audio_buf[2];
+static volatile int audio_buf_ptr[2];
 
 
 /*
@@ -173,6 +175,16 @@ void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2S1Handler (void)
     {
         int16_t s ;
         s = SPI1BUF;
+        /*static int test = 0; //test 0.5Khz pila
+        if(test>=48*3)
+            s = -30000;
+        else
+            s = 30000;
+        
+        test++;
+
+        if(test>=96*3)
+            test = 0;*/
 
         audio_data[0].buf[audio_data[0].head] = s;
         audio_data[0].count++;
@@ -184,6 +196,12 @@ void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2S1Handler (void)
 
         if(audio_data[0].count>= I2S_BUF_SIZE)
             audio_data[0].count = I2S_BUF_SIZE;
+
+        /*if(audio_buf[0]!=NULL && audio_buf_ptr[0]<(48*2))
+        {
+            audio_buf[0][audio_buf_ptr[0]] = s;
+            audio_buf_ptr[0]++;
+        }*/
     }
     IFS1bits.SPI1RXIF = 0;
 }
@@ -269,7 +287,7 @@ static void i2s_a_init()
 {
     SPI1CONbits.ON = 0;
     Nop();
-    SPI1CONbits.DISSDO = 1;     //dissable output bit
+    SPI1CONbits.DISSDO = 1;     //disable output bit
     SPI1CONbits.ENHBUF = 1;     //enchanced buffer enable
     SPI1CONbits.MSTEN = 1;      //enable master - we will generate clock
     SPI1CON2bits.AUDEN = 1;     //enable audio
@@ -308,8 +326,19 @@ void tuner_audio_run(int tuner_id, int state)
     }        
 }
 
+uint16_t * tuner_audio_setbuf(int tuner_id, uint16_t* buf)
+{
+    //FIXME: yrusit preruseni
+    uint16_t * old = (uint16_t*)audio_buf[tuner_id];
+    audio_buf[tuner_id] = buf;
+    audio_buf_ptr[tuner_id] = 0;
+
+    return old;
+}
+
 size_t tuner_audio_get(const int tuner_id, void*buf, size_t max)
 {
+    Nop();
     max >>=1;
     int16_t * b = buf;
 
@@ -366,6 +395,8 @@ void tuner_hold_in_rst(int state)
 
 void tuner_init()
 {
+    audio_buf[0] = audio_buf[1] = NULL;
+
     int i;
     //TODO dokonfigurovat pocatecni hodnotu na low
     tuner_hold_in_rst(1); //tuners reset active
