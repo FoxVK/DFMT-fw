@@ -390,7 +390,7 @@ size_t tuner_audio_get(const int tuner_id, void*buf, size_t max)
 
 void tuner_hold_in_rst(int state)
 {
-    PORTBbits.RB13 = state ? 0 : 1;
+    LATBbits.LATB2 = state ? 0 : 1;
 }
 
 void tuner_init()

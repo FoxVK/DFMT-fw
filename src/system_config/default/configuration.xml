@@ -111,7 +111,7 @@
     <Template>
       <Name>system_config.h</Name>
       <Path>app/system_config/default</Path>
-      <Checksum>09E4B793943E92FB912DF958D76EACE3</Checksum>
+      <Checksum>35A955917C4310E0626F9AC494B1F762</Checksum>
     </Template>
     <Template>
       <Name>system_interrupt.c</Name>

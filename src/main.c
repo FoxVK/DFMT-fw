@@ -113,11 +113,16 @@ int main ( void )
     ANSELA = 0;
     ANSELB = 0;
 
-    PORTBbits.RB14 = 0;    
+    LATBbits.LATB2 = 0;
+    TRISBbits.TRISB2 = 0;
 
     TRISAbits.TRISA1 = 1;   //SDI1
     TRISBbits.TRISB3 = 0;   //SS 1
     TRISBbits.TRISB14 = 0;  //SCK1
+
+    TRISAbits.TRISA4 = 1;   //SDI2
+    TRISBbits.TRISB0 = 0;   //SS 2
+    TRISBbits.TRISB15 = 0;  //SCK2
 
     SYSKEY = 0x33333333; //write invalid key to force lock
     SYSKEY = 0xAA996655; //write key1 to SYSKEY
@@ -125,6 +130,9 @@ int main ( void )
 
     SDI1Rbits.SDI1R = 0b0001;    //SDI1 on RB5
     RPB3Rbits.RPB3R = 0b0011;    //SS 1 on RB3
+
+    SDI2Rbits.SDI2R = 0b0010;    //SDI2 on RA4
+    RPB0Rbits.RPB0R = 0b0100;    //SS 2 on RB0
 
     SYSKEY = 0x33333333; //write invalid key to force lock
 
