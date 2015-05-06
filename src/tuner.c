@@ -250,6 +250,8 @@ int tuner_bytes_received()
 
 static void timer_rclk_init()
 {
+    //TODO vyhodit
+
     //timer5 init
     //IPC5SET = 0x1F; //maximal interrupt priority
     IPC5bits.T5IP = 7; //prioriy 1-7 0=disabled
@@ -404,7 +406,7 @@ void tuner_init()
     tuner_hold_in_rst(0); //tuners reset inactive
     for(i=0; i<1000; i++)Nop(); //delay
 
-    timer_rclk_init();
+    //timer_rclk_init();
 
     i2c_init();
 

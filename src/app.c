@@ -575,8 +575,26 @@ void APP_Task_configured_state( void )
 }
 
 void app_tuner_updown_tasks()
-{    
-    static uint8_t cmd_power_up[]   = {0x01, 0x00, 0xB5};
+{
+    static bool susp = true;
+
+    if(susp != appData.suspended)
+    {
+        if(appData.suspended)
+        {
+            tuner_hold_in_rst(1);
+            tuner_audio_run(0,0);
+            //tuner_audio_run(1,0);
+        }
+        else
+        {          
+            tuner_audio_run(0,1);
+            //tuner_audio_run(1,1);
+            tuner_hold_in_rst(0);
+        }
+        susp = appData.suspended;
+    }
+    /*static uint8_t cmd_power_up[]   = {0x01, 0x00, 0xB5};
     static uint8_t cmd_power_down[] = {0x11};
     static uint8_t cmd_tune[]       = {0x20,0x01,0x24,0x9A,0x00}; //0x01 = inaccurate but fast tunning alowed to 93.7
     static uint8_t cmd_int_update[] = {0x14};
@@ -726,7 +744,7 @@ void app_tuner_updown_tasks()
 
 
         }
-    }
+    }*/
 
 }
 
