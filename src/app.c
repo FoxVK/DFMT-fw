@@ -196,7 +196,7 @@ void APP_USBDeviceEventHandler
             appData.state = APP_STATE_USB_OPENED;
             appData.reading = 0;
             appData.audio_play = false;
-            //TODO simulace cteni zvuku;
+
             int i;
             for(i=0; i<AUDIO_BUFS_COUNT; i++)
             {
@@ -239,7 +239,7 @@ void APP_USBDeviceEventHandler
             appData.suspended = false;
             break;
         case USB_DEVICE_EVENT_POWER_DETECTED:
-            USB_DEVICE_Attach (appData.usbDevHandle);
+            //USB_DEVICE_Attach (appData.usbDevHandle);
             break;
         case USB_DEVICE_EVENT_POWER_REMOVED:
             USB_DEVICE_Detach (appData.usbDevHandle);
@@ -576,175 +576,139 @@ void APP_Task_configured_state( void )
 
 void app_tuner_updown_tasks()
 {
-    static bool susp = true;
-
-    if(susp != appData.suspended)
-    {
-        if(appData.suspended)
-        {
-            tuner_hold_in_rst(1);
-            tuner_audio_run(0,0);
-            //tuner_audio_run(1,0);
-        }
-        else
-        {          
-            tuner_audio_run(0,1);
-            //tuner_audio_run(1,1);
-            tuner_hold_in_rst(0);
-        }
-        susp = appData.suspended;
-    }
-    /*static uint8_t cmd_power_up[]   = {0x01, 0x00, 0xB5};
+    
+    static uint8_t cmd_power_up[]   = {0x01, 0x00, 0xB5};
     static uint8_t cmd_power_down[] = {0x11};
     static uint8_t cmd_tune[]       = {0x20,0x01,0x24,0x9A,0x00}; //0x01 = inaccurate but fast tunning alowed to 93.7
     static uint8_t cmd_int_update[] = {0x14};
     static uint8_t cmd_int_clear[]  = {0x22, 0x01};
-    static uint8_t cmd_dosr[]       = {0x12, 0x00, 0x01, 0x04, 0xBB, 0x80}; 
-    static Tuner_read_reply reply;
-    static int wait_for_ready = 0;
-    static int tuner_id = 0;
+    static uint8_t cmd_dosr[]       = {0x12, 0x00, 0x01, 0x04, 0xBB, 0x80};
+    static uint8_t cmd_refck_presc[]= {0x12, 0x00, 0x02, 0x02, 0x10, 0x2F}; //1 538 461,538461538 / 47 -> 32.733.2Hz bit 12 = 1 (hodiny josou z dclk) 0x102f
+    static uint8_t cmd_refclk_freq[]= {0x12, 0x00, 0x02, 0x01, 0x7F, 0xDD}; //32733 0x7fdd
+
+    static uint8_t * cmd_list[] = {
+        NULL,
+        cmd_power_up,
+        cmd_refclk_freq, cmd_refck_presc,
+        cmd_tune, cmd_int_update, cmd_int_clear,
+        cmd_dosr,
+        NULL
+    };
+
+    static size_t cmd_sizes[] =
+    {
+        0,
+        3,
+        6,6,
+        5,1,2,
+        6,
+        0,
+
+    };
 
     static enum {
-        ST_DOWN,
-        ST_RST_HOLD, ST_RST_RELEASE, ST_PWRUP_S, ST_PWRUP_W, ST_TUN_S, ST_TUN_W, ST_TUNINT_CLR_S, ST_I2S_ON, ST_DASR_S, ST_DASR_W,
+        ST_DOWN = 0,
+        ST_PWRUP,
+        ST_RCLK_FREQ, ST_RCLK_PRESC,
+        ST_TUNE, ST_TUNE_INT_UPDATE, ST_TUNE_INT_CLR,
+        ST_DOSR,
         ST_UP,
-        ST_POWERING_DOWN,
-    } state = ST_DOWN;
+    } state[] = {ST_DOWN, ST_DOWN};
 
+    static enum {
+        CST_DONE, CST_CHCK_REPLY, CST_READING
+    } com_st[2] = {CST_DONE, CST_DONE};
 
+    static Tuner_read_reply reply[2];
+    static int tid = 1;     //ID of currently porcessed tunner
 
-    static bool susp = false;
-    if(susp!=appData.suspended)
-    {
-        U1TXREG = !appData.suspended ? 'A' : 'B';
-        susp = appData.suspended;
-    }
-
-    if((   appData.suspended  && state!=ST_DOWN) ||
-       ( (!appData.suspended) && state!=ST_UP))
+   
            
     {
 
         Tuner_com_state tun_s = tuner_com_state();
 
+        static bool bus = false;
+        if(tun_s == TUNER_COM_BUSY)
+        {
+            if(!bus)
+                U1TXREG = 'B';
+            bus = true;
+        }
+        else
+        {
+            if(bus)
+                U1TXREG = 'b';
+            bus = false;
+        }
+
+
         if( tun_s == TUNER_COM_BUSY)
             return;
 
-        
+        //tid = (tid+1)&1;
 
-        if(wait_for_ready)
+        Nop();
+
+        switch(com_st[tid])
         {
-            static int asked = 0;
-            if(tun_s == TUNER_COM_DEV_BUSY || (tun_s == TUNER_COM_IDLE)&&!asked)
-            {
-                tuner_read(tuner_id, &reply, 1);
-                asked = 1;
+            case CST_DONE:
+                break;
+
+            case CST_CHCK_REPLY:
+                tuner_read(tid, &reply[tid], 1);
+                com_st[tid] = CST_READING;
                 return;
-            }
-            else
-            {
-                asked = 0;
-                wait_for_ready = 0;
 
-                if(reply.STATUS.bits.ERR == 1) //TODO remove
-                    Nop();
-            }
-        }
-
-        if(appData.suspended)
-            U1TXREG = '#';
-        else
-            U1TXREG = '*';
-        
-        switch(state)
-        {
-            case ST_DOWN:
-                if(appData.suspended)
-                    break;
-            case ST_RST_HOLD:
-                tuner_hold_in_rst(1);
-                state = ST_RST_RELEASE;
-                U1TXREG = '0';
-                break;
-
-            case ST_RST_RELEASE:
-                tuner_hold_in_rst(0);
-                //TODO rclk start
-                state = ST_PWRUP_S;
-                U1TXREG = '1';
-                break;
-
-            case ST_PWRUP_S:
-                tuner_write(0, cmd_power_up, sizeof(cmd_power_up));
-                wait_for_ready = 1;
-                state = ST_PWRUP_W;
-                U1TXREG = '2';
-                break;
-
-            case ST_PWRUP_W:
-                if(tun_s != TUNER_COM_IDLE)
-                    state = ST_PWRUP_S; //try it again
+            case CST_READING:
+                if(reply[tid].STATUS.bits.CTS)
+                    com_st[tid] = CST_DONE;
                 else
-                    state = ST_TUN_S;
-                break;
+                {
+                    com_st[tid] = CST_CHCK_REPLY;
+                }
+                return;
+        }
 
-            case ST_TUN_S:
-
-                tuner_write(0, cmd_tune, sizeof(cmd_tune));
-                wait_for_ready = 1;
-                state = ST_TUN_W;
-                U1TXREG = '3';
-                break;
-
-             case ST_TUN_W:
-                 if(reply.STATUS.bits.STCINT)
-                     state = ST_TUNINT_CLR_S;
-                 else
-                 {
-                    tuner_write(tuner_id, cmd_int_update, sizeof(cmd_int_update));
-                    wait_for_ready = 1;
-                 }
-                 
-                break;
-
-            case ST_TUNINT_CLR_S:
-                tuner_write(tuner_id, cmd_int_clear, sizeof(cmd_int_clear));
-                wait_for_ready = 1;
-                state = ST_I2S_ON;
-                U1TXREG = '4';
-                break;
-
-            case ST_I2S_ON:
-                tuner_audio_run(tuner_id, 1);
-                state = ST_DASR_S;
-                break;
-
-            case ST_DASR_S:
-                tuner_write(tuner_id, cmd_dosr, sizeof(cmd_dosr));
-                wait_for_ready = 1;
-                state = ST_UP;
-                appData.tuner_ready = 1;
-                U1TXREG = '5';
-                break;
-
+        switch(state[tid])
+        {
             case ST_UP:
-                if(!appData.suspended)
-                    break;
-            case ST_POWERING_DOWN:
-                appData.tuner_ready = 0;
-                tuner_write(tuner_id, cmd_power_down, sizeof(cmd_power_down));
-                tuner_audio_run(tuner_id, 0);
-                //TODO rclk stop
-                state = ST_DOWN;
-                U1TXREG = '6';
+                if(appData.suspended)
+                {
+                    tuner_hold_in_rst(1);
+                    tuner_audio_run(tid, 0);
+                    state[tid] = ST_DOWN;
+                }
                 break;
 
+            case ST_DOWN:
+                if(!appData.suspended)
+                {
+                    tuner_audio_run(tid, 1);
+                    tuner_hold_in_rst(0);
+                    state[tid]++;
+                }
+                break;
 
+            case ST_TUNE_INT_CLR:
+                if(!reply[tid].STATUS.bits.STCINT)
+                {
+                    state[tid] = ST_TUNE_INT_UPDATE;
+                    break;
+                }
+                //do not put break here or another state
 
-
+            default:
+                if(cmd_list[state[tid]]==NULL)
+                    debughalt();
+                tuner_write(tid, cmd_list[state[tid]], cmd_sizes[state[tid]]);
+                com_st[tid] = CST_CHCK_REPLY;
+                state[tid]++;
+                break;
 
         }
-    }*/
+
+    }
 
 }
 

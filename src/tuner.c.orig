@@ -2,6 +2,7 @@
 #include <sys/attribs.h>
 #include <inttypes.h>
 #include "tuner.h"
+#include "app.h"
 
 #define TUNER_A_W 0b00100010 //SEN pin = 0
 #define TUNER_B_W 0b11000110 //SEN pin = 1
@@ -60,7 +61,7 @@ Generate a Stop condition on SDAx and SCLx.
  */
 
 
-void __ISR (_I2C_1_VECTOR, IPL7AUTO) I2C1Handler (void)
+void __ISR (_I2C_1_VECTOR, IPL3AUTO) I2C1Handler (void)
 {
 
     if(IFS1bits.I2C1BIF)
@@ -168,17 +169,13 @@ void __ISR (_I2C_1_VECTOR, IPL7AUTO) I2C1Handler (void)
     }
     IFS1bits.I2C1MIF = 0;
 }
-void __ISR (_SPI_2_VECTOR, IPL4AUTO) I2SbHandler (void)
+/*
+void __ISR (_SPI_2_VECTOR, IPL4AUTO) I2S2Handler (void)
 {
-    static volatile int16_t s = 0 ;
-    
-    while(!SPI2STATbits.SPIRBE)
-        s = SPI2BUF;
+    int16_t s = SPI2BUF; //discard data
+}*/
 
-    IFS1bits.SPI2RXIF = 0;
-}
-
-void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2SaHandler (void)
+void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2S1Handler (void)
 {
     while(!SPI1STATbits.SPIRBE)
     {
@@ -257,6 +254,23 @@ int tuner_bytes_received()
         return -1;
 }
 
+static void timer_rclk_init()
+{
+    //TODO vyhodit
+
+    //timer5 init
+    //IPC5SET = 0x1F; //maximal interrupt priority
+    IPC5bits.T5IP = 7; //prioriy 1-7 0=disabled
+    IPC5bits.T5IS = 3; //sub prio 0-3
+    //T5CONbits.TCKPS = 0b011; //1:8
+    PR5 = 610; //2*32.768kHz
+    TMR5 = 0;
+
+    IFS0bits.T5IF = 0;
+    IEC0bits.T5IE = 1;
+    T5CONbits.ON = 1;
+}
+
 static void i2c_init()
 {
     //I2C init
@@ -265,7 +279,7 @@ static void i2c_init()
     I2C1BRG = /*0x88B;*/0x0C2; //DS 24 str 19: PBclk = 40MHz clk = 100kHz
     I2C1CONbits.DISSLW = 0; //because errata
 
-    IPC8bits.I2C1IP = 7; //prioriy 1-7 0=disabled
+    IPC8bits.I2C1IP = 2; //prioriy 1-7 0=disabled
 
     IFS1bits.I2C1MIF = 0;
     IEC1bits.I2C1MIE = 1;
@@ -285,7 +299,7 @@ static void i2s_a_init()
     SPI1CONbits.ENHBUF = 1;     //enchanced buffer enable
     SPI1CONbits.MSTEN = 1;      //enable master - we will generate clock
     SPI1CON2bits.AUDEN = 1;     //enable audio
-    SPI1CONbits.SRXISEL = 2;    //interrupt is generated when buffer is half full
+    SPI1CONbits.SRXISEL = 2;    //interrupt is generated whe buffer is half full
     SPI1CONbits.CKP = 1;        //clock idle in low
 
     while(!SPI1STATbits.SPIRBE)
@@ -294,14 +308,14 @@ static void i2s_a_init()
     }
     SPI1STATbits.SPIROV = 0;    //no overflow
     
-    SPI1BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1 538 461,538461538
+    SPI1BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1538,46
 
     IPC7bits.SPI1IP = 5; //prioriy 1-7 0=disabled
     IPC7bits.SPI1IS = 0; //subprio 0-3
     
     IEC1bits.SPI1RXIE = 1; //enable Rx interrupt
 }
-
+/*
 static void i2s_b_init()
 {
     SPI2CONbits.ON = 0;
@@ -319,13 +333,13 @@ static void i2s_b_init()
     }
     SPI2STATbits.SPIROV = 0;    //no overflow
 
-    SPI2BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1 538 461,538461538
+    SPI2BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1538,46
 
     IPC9bits.SPI2IP = 4; //prioriy 1-7 0=disabled
     IPC9bits.SPI2IS = 0; //subprio 0-3
 
     IEC1bits.SPI2RXIE = 1; //enable Rx interrupt
-}
+}*/
 
 //Start or stop capturing I2S audio
 void tuner_audio_run(int tuner_id, int state)
@@ -416,10 +430,18 @@ void tuner_init()
 {
     audio_buf[0] = audio_buf[1] = NULL;
 
+    int i;
+    //TODO dokonfigurovat pocatecni hodnotu na low
+    tuner_hold_in_rst(1); //tuners reset active
+    for(i=0; i<1000; i++)Nop(); //delay
+    tuner_hold_in_rst(0); //tuners reset inactive
+    for(i=0; i<1000; i++)Nop(); //delay
+
+    //timer_rclk_init();
+
     i2c_init();
 
     i2s_a_init();
-    i2s_b_init();
 }
 
 Tuner_com_state tuner_com_state()
@@ -430,4 +452,12 @@ Tuner_com_state tuner_com_state()
 size_t tuner_rwed_bytes()
 {
     return ptr+1;
+}
+
+
+void __ISR (_TIMER_5_VECTOR, IPL7AUTO) Timer5Handler (void)
+{
+    //generates ~32.768 kHz clock on RB7
+    PORTBINV = 1<<7;
+    IFS0bits.T5IF=0; // Be sure to clear the Timer5 interrupt status
 }
