@@ -239,7 +239,7 @@ void APP_USBDeviceEventHandler
             appData.suspended = false;
             break;
         case USB_DEVICE_EVENT_POWER_DETECTED:
-            //USB_DEVICE_Attach (appData.usbDevHandle);
+            USB_DEVICE_Attach (appData.usbDevHandle);
             break;
         case USB_DEVICE_EVENT_POWER_REMOVED:
             USB_DEVICE_Detach (appData.usbDevHandle);
@@ -582,14 +582,14 @@ void app_tuner_updown_tasks()
     static uint8_t cmd_tune[]       = {0x20,0x01,0x24,0x9A,0x00}; //0x01 = inaccurate but fast tunning alowed to 93.7
     static uint8_t cmd_int_update[] = {0x14};
     static uint8_t cmd_int_clear[]  = {0x22, 0x01};
-    static uint8_t cmd_dosr[]       = {0x12, 0x00, 0x01, 0x04, 0xBB, 0x80};
-    static uint8_t cmd_refck_presc[]= {0x12, 0x00, 0x02, 0x02, 0x10, 0x2F}; //1 538 461,538461538 / 47 -> 32.733.2Hz bit 12 = 1 (hodiny josou z dclk) 0x102f
+    static uint8_t cmd_dosr[]       = {0x12, 0x00, 0x01, 0x04, 0xBB, 0x80}; //sample rate
+    static uint8_t cmd_refclk_presc[]= {0x12, 0x00, 0x02, 0x02, 0x10, 0x2F}; //1538461,538461538 / 47 -> 32733,2Hz bit 12 = 1 (colck from dclk) 0x102f
     static uint8_t cmd_refclk_freq[]= {0x12, 0x00, 0x02, 0x01, 0x7F, 0xDD}; //32733 0x7fdd
 
     static uint8_t * cmd_list[] = {
         NULL,
         cmd_power_up,
-        cmd_refclk_freq, cmd_refck_presc,
+        cmd_refclk_freq, cmd_refclk_presc,
         cmd_tune, cmd_int_update, cmd_int_clear,
         cmd_dosr,
         NULL
@@ -598,10 +598,10 @@ void app_tuner_updown_tasks()
     static size_t cmd_sizes[] =
     {
         0,
-        3,
-        6,6,
-        5,1,2,
-        6,
+        sizeof(cmd_power_up),
+        sizeof(cmd_refclk_freq) ,sizeof(cmd_refclk_presc),
+        sizeof(cmd_tune), sizeof(cmd_int_update), sizeof(cmd_int_clear),
+        sizeof(cmd_dosr),
         0,
 
     };
@@ -646,7 +646,7 @@ void app_tuner_updown_tasks()
         if( tun_s == TUNER_COM_BUSY)
             return;
 
-        //tid = (tid+1)&1;
+        tid = (tid+1)&1;
 
         Nop();
 

@@ -14,14 +14,17 @@
 
 static volatile enum  {
     COM_IDLE,
-    COM_START, COM_ADDRSND, COM_ADDRACK,
-    COM_WR, COM_ACKING,
-    COM_STOPPING, COM_STOPPED
+    COM_START, COM_ADDR_SEND,
+    COM_WRITE,
+    COM_READ, COM_READ_ACK, COM_READ_NACK,
+    COM_STOP,
 }com_state;
 
 static volatile enum  {
     COM_DIR_NONE, COM_DIR_READING, COM_DIR_WRITING
 }com_dir;
+
+static volatile int com_dir_write = 1;
 
 static volatile Tuner_com_state last_err = TUNER_COM_IDLE;
 
@@ -59,6 +62,7 @@ Generate an ACK or NACK condition at the end of a received byte of data.
 Generate a Stop condition on SDAx and SCLx.
  */
 
+static void i2c_task();
 
 void __ISR (_I2C_1_VECTOR, IPL7AUTO) I2C1Handler (void)
 {
@@ -70,102 +74,8 @@ void __ISR (_I2C_1_VECTOR, IPL7AUTO) I2C1Handler (void)
         debughalt();
     }
 
-    if(com_state == COM_IDLE)
-        debughalt();
+    i2c_task();
 
-    switch (com_state)
-    {
-        case COM_START:
-            com_state = COM_ADDRSND;
-            I2C1TRN = addr;
-            break;
-
-        case COM_ADDRSND:
-            if(I2C1STATbits.ACKSTAT == 1)
-            {
-                I2C1CONbits.PEN = 1;
-                com_state = COM_STOPPED;
-                last_err = TUNER_COM_WRONG_ADDR;
-                break;
-            }
-            else
-                Nop();
-        case COM_WR:
-            if(com_dir == COM_DIR_WRITING)
-            {
-                if(I2C1STATbits.ACKSTAT == 1)
-                {
-                    I2C1CONbits.PEN = 1; //stop
-                    com_state = COM_STOPPED;
-                    last_err = TUNER_COM_WRITE_NAK;
-                    break;
-                }
-
-                if(ptr<max_len)
-                {
-                    I2C1TRN = data_buf[ptr];
-                    ptr++;
-                    com_state = COM_WR;
-                }
-                else
-                {
-                    I2C1CONbits.PEN = 1; //stop
-                    com_state = COM_STOPPED;
-                }
-            }
-            else
-            {
-                I2C1CONbits.RCEN = 1; //allow receiving
-                com_state = COM_ACKING;
-            }
-            break;
-
-        case COM_ACKING:
-            if(ptr<max_len)
-            {
-                data_buf[ptr] = I2C1RCV;
-
-                if((data_buf[0]&&0x80)==0 && ptr==0)
-                {   //CTS==0 we have to try it again later
-                    I2C1CONbits.ACKDT = 1; //NAK
-                    I2C1CONbits.ACKEN = 1;
-                    com_state = COM_STOPPING;
-                    last_err = TUNER_COM_DEV_BUSY;
-                    break;
-                }
-
-                ptr++;
-                
-            }
-
-            if(ptr<max_len)
-            {
-                I2C1CONbits.ACKDT = 0; //ACK
-                com_state = COM_WR;
-            }
-            else
-            {
-                I2C1CONbits.ACKDT = 1; //NAK
-                com_state = COM_STOPPING;
-            }
-            I2C1CONbits.ACKEN = 1;
-
-            break;
-
-        case COM_STOPPING:
-            I2C1CONbits.PEN = 1;
-            com_state = COM_STOPPED;
-            break;
-
-        case COM_STOPPED:
-            //I2C1CONbits.ON = 0;
-            //IEC1bits.I2C1MIE = 0;
-            com_state = COM_IDLE;
-            if(last_err == TUNER_COM_BUSY)
-                last_err = TUNER_COM_IDLE;
-            break;
-
-    }
     IFS1bits.I2C1MIF = 0;
 }
 void __ISR (_SPI_2_VECTOR, IPL4AUTO) I2SbHandler (void)
@@ -215,6 +125,136 @@ void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2SaHandler (void)
     IFS1bits.SPI1RXIF = 0;
 }
 
+
+static void i2c_task()
+{
+    IEC1bits.I2C1MIE = 0;
+
+    switch(com_state)
+    {
+        case COM_START:
+            if(I2C1CONbits.SEN == 0)
+            {
+                com_state = COM_ADDR_SEND;
+                I2C1TRN = addr;
+            }
+            break;
+
+        case COM_ADDR_SEND:
+            if(I2C1STATbits.TRSTAT == 0)
+            {
+
+                if(I2C1STATbits.ACKSTAT == 1)
+                {
+                    last_err = TUNER_COM_WRONG_ADDR;
+                    com_state = COM_STOP;
+                    I2C1CONbits.PEN = 1;
+                }
+                else
+                {
+                    if(ptr>=max_len)
+                    {
+                        com_state = COM_STOP;
+                        I2C1CONbits.PEN = 1;
+                    }
+                    else if(com_dir_write)
+                    {
+                        com_state = COM_WRITE;
+                        I2C1TRN = data_buf[ptr];
+                    }
+                    else
+                    {
+                        com_state = COM_READ;
+                        I2C1CONbits.RCEN = 1;
+                    }
+                }
+            }
+            break;
+
+        case COM_WRITE:
+            if(I2C1STATbits.TRSTAT == 0)
+            {
+                ptr++;
+                if(ptr>=max_len)
+                {
+                    com_state = COM_STOP;
+                    I2C1CONbits.PEN = 1;
+                }
+                else
+                {
+                    I2C1TRN = data_buf[ptr];
+                }
+
+            }
+            break;
+
+        case COM_READ:
+            if(I2C1CONbits.RCEN == 0)
+            {
+                data_buf[ptr] = I2C1RCV;
+                ptr++;
+                if(ptr == 1)
+                {
+                    if((data_buf[0] & 0x80) == 0)
+                    {
+                        com_state = COM_READ_NACK;
+                        I2C1CONbits.ACKDT = 1;
+                        I2C1CONbits.ACKEN = 1;
+                        
+                        last_err = TUNER_COM_DEV_BUSY;
+                    }
+                }
+                if(ptr>=max_len)
+                {
+                    com_state = COM_READ_NACK;
+                    I2C1CONbits.ACKDT = 1;
+                    I2C1CONbits.ACKEN = 1;
+
+                }
+                else
+                {
+                    com_state = COM_READ_ACK;
+                    I2C1CONbits.ACKDT = 0;
+                    I2C1CONbits.ACKEN = 1;
+                }
+            }
+            break;
+
+        case COM_READ_ACK:
+            if(I2C1CONbits.ACKEN == 0)
+            {
+                com_state = COM_READ;
+                I2C1CONbits.RCEN = 1;
+            }
+            break;
+
+        case COM_READ_NACK:
+            if(I2C1CONbits.ACKEN == 0)
+            {
+                com_state = COM_STOP;
+                I2C1CONbits.PEN = 1;
+            }
+            break;
+
+        case COM_STOP:
+            if(I2C1CONbits.PEN == 0)
+            {
+                I2C1CONbits.ON = 0;
+                if(last_err == TUNER_COM_BUSY)
+                    last_err = TUNER_COM_IDLE;
+                com_state = COM_IDLE;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    IEC1bits.I2C1MIE = 1;
+}
+
+
+
 void tuner_rw_start(void* data, size_t len)
 {
     data_buf = (uint8_t*)data;
@@ -234,7 +274,7 @@ void tuner_write(int tuner_id, void* data, size_t len)
 {
     tuner_rw_start(data, len);
     addr = tuner_id == 1 ? TUNER_B_W : TUNER_A_W;
-    com_dir = COM_DIR_WRITING;
+    com_dir_write = 1;
     com_state = COM_START;
     I2C1CONbits.SEN = 1; //start condition, wait for interrupt
 
@@ -244,7 +284,7 @@ void tuner_read(int tuner_id, void* data, size_t len)
 {
     tuner_rw_start(data, len);
     addr = tuner_id == 1 ? TUNER_B_R : TUNER_A_R;
-    com_dir = COM_DIR_READING;
+    com_dir_write = 0;
     com_state = COM_START;
     I2C1CONbits.SEN = 1; //start condition, wait for interrupt
 }
@@ -294,7 +334,7 @@ static void i2s_a_init()
     }
     SPI1STATbits.SPIROV = 0;    //no overflow
     
-    SPI1BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1 538 461,538461538
+    SPI1BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1?538?461,538461538
 
     IPC7bits.SPI1IP = 5; //prioriy 1-7 0=disabled
     IPC7bits.SPI1IS = 0; //subprio 0-3
@@ -319,7 +359,7 @@ static void i2s_b_init()
     }
     SPI2STATbits.SPIROV = 0;    //no overflow
 
-    SPI2BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1 538 461,538461538
+    SPI2BRG = 12;       //clock,  32bit frame X 48khz sampling = 1536kHz - now we have 1?538?461,538461538
 
     IPC9bits.SPI2IP = 4; //prioriy 1-7 0=disabled
     IPC9bits.SPI2IS = 0; //subprio 0-3
@@ -424,10 +464,11 @@ void tuner_init()
 
 Tuner_com_state tuner_com_state()
 {
+    i2c_task();
     return last_err;
 }
 
 size_t tuner_rwed_bytes()
 {
-    return ptr+1;
+    return ptr;
 }
