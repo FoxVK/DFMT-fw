@@ -284,7 +284,7 @@ void APP_USBDeviceEventHandler
         case USB_DEVICE_EVENT_CONTROL_TRANSFER_DATA_RECEIVED:
         case USB_DEVICE_EVENT_CONTROL_TRANSFER_ABORTED:
         case USB_DEVICE_EVENT_CONTROL_TRANSFER_DATA_SENT:
-            debughalt();
+            //debughalt();
             break;
 
         case USB_DEVICE_EVENT_ENDPOINT_READ_COMPLETE:
@@ -311,18 +311,7 @@ void APP_USBDeviceEventHandler
             }
             else
             {
-                int i;
-                for(i=0; i<AUDIO_BUFS_COUNT; i++)
-                {
-                    if(AudioBufs[i].trasfer_handle == ed->transferHandle)
-                    {
-                        AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-                        AudioBufs[i].isFree = 1;
-                        i=AUDIO_BUFS_COUNT;
-                    }
-                }
                 appData.noAudioData = 1;
-                //U1TXREG = 'W';
             }
             break;
         }
@@ -392,89 +381,19 @@ void APP_Task_configured_state( void )
     if(appData.audio_play && appData.noAudioData)
     {
 
-        /*static int b = 0;
-        for(b=0; b<AUDIO_BUFS_COUNT;b++)
-        {
-            if((!AudioBufs[b].isFree) && AudioBufs[b].trasfer_handle == USB_DEVICE_TRANSFER_HANDLE_INVALID)
-            {
-                static void * data;
-                data =  &(AudioBufs[b].sample);
-                static size_t size ;
-                size = sizeof(AudioBufs[b].sample);
-                static USB_DEVICE_TRANSFER_HANDLE *handle;
-                handle = &(AudioBufs[b].trasfer_handle);
+        int16_t* data = tuner_audio_get(0);
+        USB_DEVICE_TRANSFER_HANDLE handle;
 
-                USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(appData.usbDevHandle, handle, AUDIO_EP,data, size, USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
-                //debughalt();
-                if(r == USB_DEVICE_RESULT_OK)
-                {
-                    //U1TXREG = 'w';
-                    //U1TXREG = '0'+b;
-                    b++;
-                    if(b >= AUDIO_BUFS_COUNT) b=0;
-                    appData.noAudioData = 0;
-
-                }
-                else if (r == USB_DEVICE_RESULT_ERROR_TRANSFER_QUEUE_FULL)
-                {
-                    //U1TXREG = 'f';
-                    appData.noAudioData = 0;
-                    AudioBufs[b].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-                }
-                else
-                {
-                    //U1TXREG = 'e';
-                    AudioBufs[b].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-                }
-                b = AUDIO_BUFS_COUNT;
-            }
-        }*/
-
-        /*static AudioDataBufs *filled = NULL;
-        if(filled==NULL)
-        {
-            filled = &AudioBufs[0];
-        }
-        
-        AudioDataBufs *toFill, *toSend = filled;
-        toFill = (filled == &AudioBufs[0]) ? &AudioBufs[1] : &AudioBufs[0];
-
-        int i = 0;
-        for(;i<48;i++)
-            toFill->sample[i].l = toFill->sample[i].r = 32767;
-
-        tuner_audio_setbuf(0, (uint16_t*)toFill->sample);
 
         USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(
                 appData.usbDevHandle,
-                &toSend->trasfer_handle,
+                &handle,
                 AUDIO_EP,
-                toSend->sample,
-                sizeof(toSend->sample),
-                USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
-
-        filled = toFill;
-
-        appData.noAudioData = 0;
-        toSend->trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;*/
-        
-        AudioDataBufs *b = &AudioBufs[0];
-        int i = tuner_audio_get(0, b->sample, sizeof(AudioBufs[0].sample));
-
-        for(;i<48;i++)
-            b->sample[i].l = b->sample[i].r = 125; //TODO remove this
-
-        USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(
-                appData.usbDevHandle,
-                &b->trasfer_handle,
-                AUDIO_EP,
-                b->sample,
-                sizeof(b->sample),
+                data,
+                48*2*2,
                 USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
 
         appData.noAudioData = 0;
-        b->trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-
     }
 
     //Allows receive a data for I2C tunel from host
@@ -559,20 +478,8 @@ void APP_Task_configured_state( void )
             appData.tuner_wait_for_reply = 0;
         }     
     }
-
-    //simulace cteni zvuku;
-    /*
-    int i;
-    for(i=0; i<AUDIO_BUFS_COUNT; i++)
-    {
-        if(AudioBufs[i].isFree)
-        {
-             AudioBufs[i].isFree = 0;
-            i = AUDIO_BUFS_COUNT;
-        }
-    }
-    */
 }
+
 
 void app_tuner_updown_tasks()
 {

@@ -8,7 +8,10 @@
 #define TUNER_A_R 0b00100011 //SEN pin = 0
 #define TUNER_B_R 0b11000111 //SEN pin = 1
 
-#define I2S_BUF_SIZE (2*2*48)
+#define I2S_FRAME_SIZE  48
+#define I2S_CHANNELS    2
+#define I2S_FRAMES      3
+#define I2S_SAMPLE_SIZE 2
 
  #define debughalt() __asm__ volatile (" sdbbp 0")
 
@@ -34,33 +37,7 @@ static volatile size_t   max_len;
 
 static uint8_t addr = 0;
 
-
-static volatile struct  {
-    int16_t buf[I2S_BUF_SIZE];
-    size_t head;
-    size_t count;  //count of unreaden bytes
-}  audio_data[2];
-
-static volatile uint16_t * audio_buf[2];
-static volatile int audio_buf_ptr[2];
-
-
-/*
-Turn on the I 2 C module by setting the ON bit (I2CxCON<15>) to ?1?.
-Assert a Start condition on SDAx and SCLx.
-Send the I 2 C device address byte to the slave with a write indication.
-Wait for and verify an Acknowledge from the slave.
-Send the serial memory address high byte to the slave.
-Wait for and verify an Acknowledge from the slave.
-Send the serial memory address low byte to the slave.
-Wait for and verify an Acknowledge from the slave.
-Assert a Repeated Start condition on SDAx and SCLx.
-Send the device address byte to the slave with a read indication.
-Wait for and verify an Acknowledge from the slave.
-Enable master reception to receive serial memory data.
-Generate an ACK or NACK condition at the end of a received byte of data.
-Generate a Stop condition on SDAx and SCLx.
- */
+static volatile int16_t i2s_buf[2][I2S_FRAMES][I2S_FRAME_SIZE*I2S_CHANNELS];
 
 static void i2c_task();
 
@@ -87,44 +64,6 @@ void __ISR (_SPI_2_VECTOR, IPL4AUTO) I2SbHandler (void)
 
     IFS1bits.SPI2RXIF = 0;
 }
-
-void __ISR (_SPI_1_VECTOR, IPL5AUTO) I2SaHandler (void)
-{
-    while(!SPI1STATbits.SPIRBE)
-    {
-        int16_t s ;
-        s = SPI1BUF;
-        /*static int test = 0; //test 0.5Khz pila
-        if(test>=48*3)
-            s = -30000;
-        else
-            s = 30000;
-        
-        test++;
-
-        if(test>=96*3)
-            test = 0;*/
-
-        audio_data[0].buf[audio_data[0].head] = s;
-        audio_data[0].count++;
-        audio_data[0].head++;
-        Nop();
-
-        if(audio_data[0].head >= I2S_BUF_SIZE)
-            audio_data[0].head = 0;
-
-        if(audio_data[0].count>= I2S_BUF_SIZE)
-            audio_data[0].count = I2S_BUF_SIZE;
-
-        /*if(audio_buf[0]!=NULL && audio_buf_ptr[0]<(48*2))
-        {
-            audio_buf[0][audio_buf_ptr[0]] = s;
-            audio_buf_ptr[0]++;
-        }*/
-    }
-    IFS1bits.SPI1RXIF = 0;
-}
-
 
 static void i2c_task()
 {
@@ -253,6 +192,10 @@ static void i2c_task()
     IEC1bits.I2C1MIE = 1;
 }
 
+static unsigned VirtToPhy(void* addr)
+{
+    return ((unsigned)addr) & 0x1FFFFFFF;
+}
 
 
 void tuner_rw_start(void* data, size_t len)
@@ -319,13 +262,18 @@ static void i2c_init()
 
 static void i2s_a_init()
 {
+    int i,j;
+    for(i=0;i<I2S_FRAMES;i++)
+        for(j=0;j<I2S_FRAME_SIZE*I2S_CHANNELS;j++)
+            i2s_buf[0][i][j] = 0xff;
+
     SPI1CONbits.ON = 0;
     Nop();
     SPI1CONbits.DISSDO = 1;     //disable output bit
-    SPI1CONbits.ENHBUF = 1;     //enchanced buffer enable
+    //SPI1CONbits.ENHBUF = 1;     //enchanced buffer enable
     SPI1CONbits.MSTEN = 1;      //enable master - we will generate clock
     SPI1CON2bits.AUDEN = 1;     //enable audio
-    SPI1CONbits.SRXISEL = 2;    //interrupt is generated when buffer is half full
+    //SPI1CONbits.SRXISEL = 2;    //interrupt is generated when buffer is half full
     SPI1CONbits.CKP = 1;        //clock idle in low
 
     while(!SPI1STATbits.SPIRBE)
@@ -339,7 +287,21 @@ static void i2s_a_init()
     IPC7bits.SPI1IP = 5; //prioriy 1-7 0=disabled
     IPC7bits.SPI1IS = 0; //subprio 0-3
     
-    IEC1bits.SPI1RXIE = 1; //enable Rx interrupt
+    //IEC1bits.SPI1RXIE = 1; //enable Rx interrupt
+
+    //DMA
+    DCH0CONbits.CHAEN = 1;      //auto enable
+    DCH0ECONbits.CHSIRQ = 37;   //cell start interrupt number 
+    DCH0ECONbits.SIRQEN = 1;    //start cell transfer when chsirq match
+
+    DCH0DSA =  VirtToPhy(i2s_buf[0]);
+    DCH0DSIZ = I2S_FRAMES * I2S_CHANNELS * I2S_FRAME_SIZE * I2S_SAMPLE_SIZE;
+
+    DCH0SSA = VirtToPhy((void*)&SPI1BUF);
+    DCH0SSIZ = I2S_SAMPLE_SIZE;
+    DCH0CSIZ = I2S_SAMPLE_SIZE; //bytes per event
+
+    DCH0CONbits.CHEN = 1;       //channel is enabled
 }
 
 static void i2s_b_init()
@@ -370,81 +332,34 @@ static void i2s_b_init()
 //Start or stop capturing I2S audio
 void tuner_audio_run(int tuner_id, int state)
 {
-    audio_data[tuner_id].head = 0;
-    audio_data[tuner_id].count = 0;
+
 
     if(tuner_id == 0)
     {
         IFS1CLR = 0b111 << 4;
-        SPI1CONbits.ON = state;
+        SPI1CONbits.ON = 1; //state;
     }
     else
     {
         IFS1CLR = 0b111 << 18;
-        SPI2CONbits.ON = state;
+        SPI2CONbits.ON = 1;
     }        
 }
 
-uint16_t * tuner_audio_setbuf(int tuner_id, uint16_t* buf)
+
+
+int16_t* tuner_audio_get(const int tuner_id)
 {
-    //FIXME: yrusit preruseni
-    uint16_t * old = (uint16_t*)audio_buf[tuner_id];
-    audio_buf[tuner_id] = buf;
-    audio_buf_ptr[tuner_id] = 0;
-
-    return old;
-}
-
-size_t tuner_audio_get(const int tuner_id, void*buf, size_t max)
-{
-    Nop();
-    max >>=1;
-    int16_t * b = buf;
-
-    if(tuner_id)
-    {
-        if(!SPI2CONbits.ON)
-            return 0;
-    }
-    else
-    {
-        if(!SPI1CONbits.ON)
-            return 0;
-    }
-    //begin critical section
-    if(tuner_id)
-        IEC1bits.SPI2RXIE = 0;
-    else
-        IEC1bits.SPI1RXIE = 0;
+    const unsigned frame_bytes = I2S_CHANNELS*I2S_FRAME_SIZE*I2S_SAMPLE_SIZE;
+    unsigned int dmaptr = (tuner_id == 0) ? DCH0DPTR : DCH1DPTR;
+    int buf_part=-1; 
+    for(;dmaptr > frame_bytes; dmaptr -= frame_bytes)
+        buf_part++;
     
-        int ptr = audio_data[tuner_id].head;
-        int count = audio_data[tuner_id].count;
+    if(buf_part<0)
+        buf_part = I2S_FRAMES - 1;
 
-        if (count>max)
-            count = max;
-
-        audio_data[tuner_id].count -= count;
-
-    if(tuner_id)
-        IEC1bits.SPI2RXIE = 1;
-    else
-        IEC1bits.SPI1RXIE = 1;
-    //end critical section
-
-    ptr -= count;
-    if(ptr<0)
-        ptr += I2S_BUF_SIZE;
-
-    int i;
-    for(i=0; i<count; i++)
-    {
-        b[i]=audio_data[tuner_id].buf[ptr];
-        ptr++;
-        if(ptr>=I2S_BUF_SIZE)
-            ptr=0;
-    }
-
-    return count;
+    return (int16_t*) i2s_buf[tuner_id][buf_part];
 }
 
 void tuner_hold_in_rst(int state)
@@ -454,10 +369,10 @@ void tuner_hold_in_rst(int state)
 
 void tuner_init()
 {
-    audio_buf[0] = audio_buf[1] = NULL;
-
     i2c_init();
 
+
+    DMACONbits.ON = 1;
     i2s_a_init();
     i2s_b_init();
 }

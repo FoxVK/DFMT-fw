@@ -22,8 +22,8 @@ Tuner_com_state tuner_com_state();
 size_t tuner_rwed_bytes();
 
 void tuner_audio_run(int tuner_id, int state);
-size_t tuner_audio_get(const int tuner_id, void* buf, size_t max);
-uint16_t * tuner_audio_setbuf(int tuner_id, uint16_t* buf);
+int16_t * tuner_audio_get(const int tuner_id);
+
 
 #ifdef	__cplusplus
 }
