@@ -116,7 +116,7 @@ int main ( void )
     LATBbits.LATB2 = 0;
     TRISBbits.TRISB2 = 0;
 
-    TRISAbits.TRISA1 = 1;   //SDI1
+    TRISBbits.TRISB5 = 1;   //SDI1
     TRISBbits.TRISB3 = 0;   //SS 1
     TRISBbits.TRISB14 = 0;  //SCK1
 
