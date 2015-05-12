@@ -1,4 +1,7 @@
- #define debughalt() __asm__ volatile (" sdbbp 0")
+#define debughalt() __asm__ volatile (" sdbbp 0")
+
+#define PACKET_SIZE (48*2*2)
+//#define NO_USB_ATTACH
 /*******************************************************************************
   MPLAB Harmony Application Source File
   
@@ -59,94 +62,10 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 #include "tuner.h"
 #include <usb/usb_device.h>
 
-// *****************************************************************************
-// *****************************************************************************
-// Section: Global Data Definitions
-// *****************************************************************************
-// *****************************************************************************
 
-// *****************************************************************************
-/* Application Data
-
-  Summary:
-    Holds application data
-
-  Description:
-    This structure holds the application's data.
-
-  Remarks:
-    This structure should be initialized by the APP_Initialize function.
-    
-    Application strings and buffers are be defined outside this structure.
-*/
 
 APP_DATA appData;
 
-#define AUDIO_BUFS_COUNT 3
-
-AudioDataBufs AudioBufs[AUDIO_BUFS_COUNT];
-
-// *****************************************************************************
-// *****************************************************************************
-// Section: Application Callback Functions
-// *****************************************************************************
-// *****************************************************************************
-
-/* TODO:  Add any necessary callback funtions.
-*/
-
-// *****************************************************************************
-// *****************************************************************************
-// Section: Application Local Functions
-// *****************************************************************************
-// *****************************************************************************
-
-/* TODO:  Add any necessary local functions.
-*/
-
-
-// *****************************************************************************
-// *****************************************************************************
-// Section: Application Initialization and State Machine Functions
-// *****************************************************************************
-// *****************************************************************************
-
-/*******************************************************************************
-  Function:
-    void APP_Initialize ( void )
-
-  Remarks:
-    See prototype in app.h.
- */
-
-typedef struct {
-    struct {
-    unsigned short Nothing:2;
-    unsigned short BSTALL:1;
-    unsigned short DTS:1;
-    unsigned short NINC:1;
-    unsigned short KEEP:1;
-    unsigned short DATA01:1;
-    unsigned short UOWN:1;
-    unsigned short BYTE_COUNT;
-    void * BUFFER_ADDRESS;
-    } RX[2];
-
-    struct {
-    unsigned short Nothing:2;
-    unsigned short BSTALL:1;
-    unsigned short DTS:1;
-    unsigned short NINC:1;
-    unsigned short KEEP:1;
-    unsigned short DATA01:1;
-    unsigned short UOWN:1;
-    unsigned short BYTE_COUNT;
-    void * BUFFER_ADDRESS;
-    } TX[2];
-
-}BufferDT;
-
-volatile BufferDT * BDT;
 
 void APP_Initialize ( void )
 {
@@ -165,15 +84,7 @@ void APP_Initialize ( void )
     appData.tuner_wait_for_reply = 0;
 
     appData.tunnel_write_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-    
-    int i,j;
-    for(i=0; i<AUDIO_BUFS_COUNT; i++)
-    {
-        AudioBufs[i].isFree = 1;
-        AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-        for(j=0; j<48; j++)
-            AudioBufs[i].sample[j].l = AudioBufs[i].sample[j].r = j<24 ? 0:0xff;
-    }
+
     tuner_init();
 }
 
@@ -197,16 +108,6 @@ void APP_USBDeviceEventHandler
             appData.reading = 0;
             appData.audio_play = false;
 
-            int i;
-            for(i=0; i<AUDIO_BUFS_COUNT; i++)
-            {
-                if(!AudioBufs[i].trasfer_handle != USB_DEVICE_TRANSFER_HANDLE_INVALID)
-                {
-                    USB_DEVICE_EndpointTransferCancel(appData.usbDevHandle, AUDIO_EP, AudioBufs[i].trasfer_handle);
-                    AudioBufs[i].isFree = 1;
-                    AudioBufs[i].trasfer_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
-                }
-            }
             USB_DEVICE_EndpointDisable(appData.usbDevHandle, AUDIO_EP);
 
             if(appData.tunnel_write_handle != USB_DEVICE_TRANSFER_HANDLE_INVALID)
@@ -223,8 +124,7 @@ void APP_USBDeviceEventHandler
             {
 
             }
-            size_t size = sizeof(AudioBufs[0].sample);
-            USB_DEVICE_EndpointEnable(appData.usbDevHandle, AUDIO_STREAMING_INTERFACE_ID, AUDIO_EP, USB_TRANSFER_TYPE_ISOCHRONOUS, size);
+            USB_DEVICE_EndpointEnable(appData.usbDevHandle, AUDIO_STREAMING_INTERFACE_ID, AUDIO_EP, USB_TRANSFER_TYPE_ISOCHRONOUS, PACKET_SIZE);
             USB_DEVICE_EndpointEnable(appData.usbDevHandle, TUNER_CONTROL_INTERFACE_ID, TUNNEL_EP_IN, USB_TRANSFER_TYPE_BULK, 32);
             USB_DEVICE_EndpointEnable(appData.usbDevHandle, TUNER_CONTROL_INTERFACE_ID, TUNNEL_EP_OUT, USB_TRANSFER_TYPE_BULK, 32);
 
@@ -239,7 +139,11 @@ void APP_USBDeviceEventHandler
             appData.suspended = false;
             break;
         case USB_DEVICE_EVENT_POWER_DETECTED:
-            USB_DEVICE_Attach (appData.usbDevHandle);
+            #ifndef NO_USB_ATTACH
+                USB_DEVICE_Attach (appData.usbDevHandle);
+            #else
+                #warning "USB ATTACH DISABLED"
+            #endif
             break;
         case USB_DEVICE_EVENT_POWER_REMOVED:
             USB_DEVICE_Detach (appData.usbDevHandle);
@@ -350,7 +254,6 @@ void APP_Tasks ( void )
                 /* Register a callback with device layer to get event notification (for end point 0) */
                 USB_DEVICE_EventHandlerSet(appData.usbDevHandle, APP_USBDeviceEventHandler, 0);
                 appData.state = APP_STATE_USB_OPENED;
-                BDT = ((BufferDT *)((USB_DEVICE_OBJ *)appData.usbDevHandle)->usbCDHandle);
             }
             break;
         }
@@ -390,7 +293,7 @@ void APP_Task_configured_state( void )
                 &handle,
                 AUDIO_EP,
                 data,
-                48*2*2,
+                PACKET_SIZE,
                 USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
 
         appData.noAudioData = 0;
