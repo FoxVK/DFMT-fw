@@ -319,7 +319,7 @@ const uint8_t conf_desc[] =
     USB_DESCRIPTOR_ENDPOINT,        // ENDPOINT descriptor (bDescriptorType)
     AUDIO_EP,                       // Endpoint number. (bEndpointAddress) | direction
     0x01,                           // Isochronous, not shared. (bmAttributes)
-    0xC0,0x00,                      // 48*4=192=0x00C0 bytes per packet (wMaxPacketSize)
+    0x80,0x01,//0xC0,0x00,                      // 48*4=192=0x00C0 bytes per packet (wMaxPacketSize)
     0x01,                           // One packet per frame.(bInterval)
     0x00,                           // Unused. (bRefresh)
     0x00,                           // Unused. (bSynchAddress)

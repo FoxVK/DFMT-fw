@@ -8,7 +8,7 @@
 #define TUNER_A_R 0b00100011 //SEN pin = 0
 #define TUNER_B_R 0b11000111 //SEN pin = 1
 
-#define I2S_FRAME_SIZE  48
+#define I2S_FRAME_SIZE  (48*2)
 #define I2S_CHANNELS    2
 #define I2S_FRAMES      3
 #define I2S_SAMPLE_SIZE 2

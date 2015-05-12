@@ -1,6 +1,6 @@
 #define debughalt() __asm__ volatile (" sdbbp 0")
 
-#define PACKET_SIZE (48*2*2)
+#define PACKET_SIZE (48*2*2*2)
 //#define NO_USB_ATTACH
 /*******************************************************************************
   MPLAB Harmony Application Source File
@@ -66,6 +66,9 @@ SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
 
 APP_DATA appData;
 
+#define AUDIO_HANDLES 2
+const USB_DEVICE_TRANSFER_HANDLE HANDLE_INVALID = USB_DEVICE_TRANSFER_HANDLE_INVALID;
+USB_DEVICE_TRANSFER_HANDLE audio_handle[AUDIO_HANDLES];
 
 void APP_Initialize ( void )
 {
@@ -85,8 +88,14 @@ void APP_Initialize ( void )
 
     appData.tunnel_write_handle = USB_DEVICE_TRANSFER_HANDLE_INVALID;
 
+    int i = 0;
+    for(;i<AUDIO_HANDLES;i++)
+        audio_handle[i]=HANDLE_INVALID;
+
     tuner_init();
 }
+
+
 
 
 void APP_USBDeviceEventHandler
@@ -215,7 +224,10 @@ void APP_USBDeviceEventHandler
             }
             else
             {
-                appData.noAudioData = 1;
+                int i=0;
+                for(;i<AUDIO_HANDLES;i++)
+                    if(ed->transferHandle == audio_handle[i])
+                       audio_handle[i] = HANDLE_INVALID;
             }
             break;
         }
@@ -281,22 +293,38 @@ void APP_Tasks ( void )
 void APP_Task_configured_state( void )
 {
     //Tries to send sound frame if available
-    if(appData.audio_play && appData.noAudioData)
     {
-
-        int16_t* data = tuner_audio_get(0);
-        USB_DEVICE_TRANSFER_HANDLE handle;
-
-
-        USB_DEVICE_RESULT r = USB_DEVICE_EndpointWrite(
-                appData.usbDevHandle,
-                &handle,
-                AUDIO_EP,
-                data,
-                PACKET_SIZE,
-                USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE);
-
-        appData.noAudioData = 0;
+        int i=0;
+        static int last = 0;
+        static int16_t* last_data = NULL;
+        int cnt;
+        for(;i<AUDIO_HANDLES;i++)
+        {
+            if(audio_handle[i] == HANDLE_INVALID)
+            {
+                int16_t* data = tuner_audio_get(0);
+                if(data != last_data)
+                {
+                    USB_DEVICE_EndpointWrite(
+                        appData.usbDevHandle,
+                        &audio_handle[i],
+                        AUDIO_EP,
+                        data,
+                        PACKET_SIZE,
+                        USB_DEVICE_TRANSFER_FLAGS_DATA_COMPLETE
+                            );
+                    last_data = data;
+                }
+                
+            }
+            else
+                cnt++;
+        }
+        if(cnt!=last)
+        {
+            U1TXREG = '0'+(char)cnt;
+            last = cnt;
+        }
     }
 
     //Allows receive a data for I2C tunel from host
