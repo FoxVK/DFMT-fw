@@ -223,8 +223,8 @@ const uint8_t conf_desc[] =
     /* USB Microphone Configuration Descriptor */
     0x09,//sizeof(USB_CFG_DSC),     // Size of this descriptor in bytes
     USB_DESCRIPTOR_CONFIGURATION,   // CONFIGURATION descriptor type
-    0x7F/*0x64*/,0x00,                      // Total length of data for this cfg
-    3,//2,                              // Number of interfaces in this cfg
+    0x7F,0x00,                      // Total length of data for this cfg
+    3,                              // Number of interfaces in this cfg
     1,                              // Index value of this configuration
     0,                              // Configuration string index
     USB_ATTRIBUTE_DEFAULT,          // Attributes, see usb_device.h
@@ -268,7 +268,7 @@ const uint8_t conf_desc[] =
     USB_AUDIO_CS_INTERFACE,         // CS_INTERFACE Descriptor Type (bDescriptorType)
     USB_AUDIO_OUTPUT_TERMINAL,      // OUTPUT_TERMINAL descriptor subtype (bDescriptorSubtype)
     ID_OUTPUT_TERMINAL,             // ID of this Terminal. (bTerminalID)
-    0x01,0x03,                      // USB Streaming. (wTerminalType
+    0x01,0x01,                      // USB Streaming. (wTerminalType
     0x00,                           // unused (bAssocTerminal)
     ID_INPUT_TERMINAL,              // From Input Terminal.(bSourceID)
     0x00,                           // unused  (iTerminal)
